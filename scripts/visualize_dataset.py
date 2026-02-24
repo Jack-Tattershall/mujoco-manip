@@ -23,7 +23,6 @@ import rerun as rr
 import torch
 import tqdm
 
-# Add project root to path
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
@@ -39,7 +38,7 @@ from src.pose_utils import (  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 
-SKIP_KEYS = {
+SKIP_KEYS: set[str] = {
     "frame_index",
     "episode_index",
     "index",
@@ -49,7 +48,6 @@ SKIP_KEYS = {
     "observation.state",
 }
 
-# Map keypoint keys → (image key, list of (label, RGB color) per point).
 KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]] = {
     "observation.keypoints_overhead": (
         "observation.images.overhead",
@@ -84,12 +82,11 @@ KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]]
     ),
 }
 
-# Keys not logged as per-dimension scalars.
-SPECIAL_KEYS = {
+SPECIAL_KEYS: set[str] = {
     "observation.target_bin_onehot",
 }
 
-MARKER_RADIUS = 4
+MARKER_RADIUS: int = 4
 
 
 def _draw_marker(img: np.ndarray, x: int, y: int, color: tuple[int, int, int]) -> None:
@@ -120,16 +117,12 @@ def visualize_episode(
     feature_keys = sorted(k for k in sample if k not in SKIP_KEYS)
     print(f"Dataset features: {feature_keys}")
 
-    # --- 3D trail accumulation ---
-    # Two 3D views: state_3d (observation EE) and action_3d (action targets).
-    # Each shows absolute (green) vs relative-reconstructed (blue) overlay.
     state_abs_trail: list[list[float]] = []
     state_rel_trail: list[list[float]] = []
     action_abs_trail: list[list[float]] = []
     action_rel_trail: list[list[float]] = []
     T_initial: np.ndarray | None = None
 
-    # Determine which keys are present
     first_frame = dataset[0]
     has_state_8dof = "observation.state.ee.8dof" in first_frame
     has_state_rel_8dof = "observation.state.ee.8dof_rel" in first_frame
@@ -138,10 +131,7 @@ def visualize_episode(
     has_action_rel_8dof = "action.ee.8dof_rel" in first_frame
     has_action_rel_10dof = "action.ee.10dof_rel" in first_frame
 
-    # Build T_initial from the sim's EE pose right after reset_to_keyframe,
-    # matching how generate_dataset.py captures initial_se3 before any physics
-    # steps (frame 0's observation is recorded 16 steps later, so it differs).
-    has_any_rel = (
+    has_any_rel: bool = (
         has_state_rel_8dof
         or has_state_rel_10dof
         or has_action_rel_8dof
@@ -161,7 +151,6 @@ def visualize_episode(
         frame = dataset[i]
         rr.set_time("frame_index", sequence=frame["frame_index"].item())
 
-        # First pass: convert images to HWC uint8 numpy arrays
         images: dict[str, np.ndarray] = {}
         for key in frame:
             if key in SKIP_KEYS or key in SPECIAL_KEYS:
@@ -172,12 +161,11 @@ def visualize_episode(
             if not isinstance(val, np.ndarray) or val.ndim != 3:
                 continue
             if val.shape[0] in (1, 3, 4) and val.shape[0] < val.shape[1]:
-                val = np.transpose(val, (1, 2, 0))  # CHW -> HWC
+                val = np.transpose(val, (1, 2, 0))
             if val.dtype == np.float32 or val.dtype == np.float64:
                 val = (val * 255).clip(0, 255).astype(np.uint8)
             images[key] = val.copy()
 
-        # Draw keypoints directly onto images
         for kp_key, (img_key, point_info) in KEYPOINT_OVERLAYS.items():
             if kp_key not in frame or img_key not in images:
                 continue
@@ -190,16 +178,13 @@ def visualize_episode(
             for pt_idx, (_, color) in enumerate(point_info):
                 if pt_idx >= len(pts):
                     break
-                # Flip 180°: projection coords are inverted relative to rendered image
                 px = int(round((1.0 - pts[pt_idx, 0]) * w))
                 py = int(round((1.0 - pts[pt_idx, 1]) * h))
                 _draw_marker(img, px, py, color)
 
-        # Log annotated images
         for key, img in images.items():
             rr.log(key, rr.Image(img))
 
-        # Log 1D features as scalar time series
         for key in frame:
             if key in SKIP_KEYS or key in SPECIAL_KEYS:
                 continue
@@ -215,8 +200,6 @@ def visualize_episode(
                 )
                 rr.log(f"{key}/{name}", rr.Scalars(float(v)))
 
-        # --- 3D trail logging ---
-        # state_3d: absolute (green) vs relative-reconstructed (blue)
         if has_state_8dof:
             ee_xyz = frame["observation.state.ee.8dof"].numpy()[:3].tolist()
             state_abs_trail.append(ee_xyz)
@@ -241,7 +224,6 @@ def visualize_episode(
                 rr.LineStrips3D([state_rel_trail], colors=[[0, 100, 255]]),
             )
 
-        # action_3d: absolute (green) vs relative-reconstructed (blue)
         if has_action_8dof:
             act_xyz = frame["action.ee.8dof"].numpy()[:3].tolist()
             action_abs_trail.append(act_xyz)
@@ -266,7 +248,6 @@ def visualize_episode(
                 rr.LineStrips3D([action_rel_trail], colors=[[0, 100, 255]]),
             )
 
-        # target_bin_onehot as bar chart
         if "observation.target_bin_onehot" in frame:
             val = frame["observation.target_bin_onehot"]
             if isinstance(val, torch.Tensor):
