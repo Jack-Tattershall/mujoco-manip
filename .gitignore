@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Generated datasets and visualizations
+datasets/
+viz/
+
+# Vendored third-party models
+third_party/

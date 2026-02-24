@@ -1,0 +1,17 @@
+[project]
+name = "mujoco-manip"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "mujoco>=3.5.0",
+    "numpy>=2.4.2",
+    "gymnasium>=1.0.0",
+    "lerobot>=0.4.0",
+    "Pillow>=10.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
