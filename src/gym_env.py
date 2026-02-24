@@ -7,7 +7,7 @@ import mujoco
 import numpy as np
 from gymnasium import spaces
 
-from .cameras import CameraRenderer, compute_keypoints
+from .cameras import CameraRenderer, compute_keypoints, project_3d_to_2d
 from .constants import (
     ACTION_REPEAT,
     BINS,
@@ -104,6 +104,9 @@ class PickPlaceGymEnv(gym.Env):
         # Initial EE pose (set on reset)
         self._initial_ee_se3: np.ndarray | None = None
 
+        # Target keypoints in overhead camera (set on reset)
+        self._target_kp_overhead: np.ndarray | None = None
+
         # Action space depends on mode
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -133,6 +136,7 @@ class PickPlaceGymEnv(gym.Env):
             "target_bin_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
             "keypoints_overhead": spaces.Box(0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32),
             "keypoints_wrist": spaces.Box(0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32),
+            "target_keypoints_overhead": spaces.Box(0.0, 1.0, (2, 2), dtype=np.float32),
         })
 
     def _capture_initial_pose(self):
@@ -207,6 +211,7 @@ class PickPlaceGymEnv(gym.Env):
             "target_bin_onehot": onehot,
             "keypoints_overhead": kp_overhead,
             "keypoints_wrist": kp_wrist,
+            "target_keypoints_overhead": self._target_kp_overhead,
         }
 
     def _compute_reward(self) -> tuple[float, bool]:
@@ -257,6 +262,16 @@ class PickPlaceGymEnv(gym.Env):
         else:
             idx = self.np_random.integers(len(self._task_pool))
             self._obj_name, self._bin_name = self._task_pool[idx]
+
+        # Cache target keypoints in overhead camera (constant for the episode)
+        model, data = self._env.model, self._env.data
+        target_3d = np.array([
+            data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._obj_name)],
+            data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._bin_name)],
+        ])
+        self._target_kp_overhead = project_3d_to_2d(
+            model, data, "overhead", target_3d, self._image_size,
+        )
 
         obs = self._get_obs()
         return obs, {}
