@@ -1,17 +1,4 @@
-"""Visualize all features of a LeRobot dataset episode in Rerun.
-
-Logs images, scalar time series (with named dimensions), and all custom
-keys like ee.8dof, ee.10dof, keypoints, and target_bin_onehot.
-
-Examples:
-
-    uv run python scripts/visualize_dataset.py \
-        --repo-id test/pick-place --root ./datasets --episode-index 0
-
-    uv run python scripts/visualize_dataset.py \
-        --repo-id test/pick-place --root ./datasets --episode-index 0 \
-        --save ./viz/ep0.rrd
-"""
+"""Visualize all features of a LeRobot dataset episode in Rerun."""
 
 import argparse
 import os

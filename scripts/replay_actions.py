@@ -1,18 +1,4 @@
-"""Replay recorded dataset actions in MuJoCo to verify correctness.
-
-Loads a LeRobot dataset episode and feeds the recorded actions back through
-IK, displaying the result in the MuJoCo viewer.
-
-Examples:
-
-    uv run python scripts/replay_actions.py \
-        --repo-id kinisi/pick-place-v1 --root ./datasets/kinisi/pick-place-v1 \
-        --episode-index 0 --action-key action.ee.8dof
-
-    uv run python scripts/replay_actions.py \
-        --repo-id kinisi/pick-place-v1 --root ./datasets/kinisi/pick-place-v1 \
-        --episode-index 0 --action-key action.ee.8dof_rel --slow 2
-"""
+"""Replay recorded dataset actions in MuJoCo to verify correctness."""
 
 import argparse
 import os
