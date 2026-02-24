@@ -11,22 +11,45 @@ class CameraRenderer:
 
     def __init__(
         self, model: mujoco.MjModel, height: int = IMAGE_SIZE, width: int = IMAGE_SIZE
-    ):
-        self._renderer = mujoco.Renderer(model, height, width)
+    ) -> None:
+        """Initialise the renderer.
+
+        Args:
+            model: MuJoCo model.
+            height: Image height in pixels.
+            width: Image width in pixels.
+        """
+        self._renderer: mujoco.Renderer = mujoco.Renderer(model, height, width)
 
     def render(self, data: mujoco.MjData, camera_name: str) -> np.ndarray:
-        """Render an RGB image from the named camera. Returns (H, W, 3) uint8."""
+        """Return an (H, W, 3) uint8 RGB image from the named camera.
+
+        Args:
+            data: MuJoCo data (current simulation state).
+            camera_name: Name of the camera defined in the MJCF.
+
+        Returns:
+            RGB image array.
+        """
         self._renderer.update_scene(data, camera=camera_name)
         return self._renderer.render()
 
     def render_all(self, data: mujoco.MjData) -> dict[str, np.ndarray]:
-        """Render from both overhead and wrist cameras."""
+        """Return overhead and wrist camera images as a dict.
+
+        Args:
+            data: MuJoCo data (current simulation state).
+
+        Returns:
+            Dict with keys ``"overhead"`` and ``"wrist"``.
+        """
         return {
             "overhead": self.render(data, "overhead"),
             "wrist": self.render(data, "wrist"),
         }
 
-    def close(self):
+    def close(self) -> None:
+        """Release renderer resources."""
         self._renderer.close()
 
 
@@ -37,42 +60,44 @@ def project_3d_to_2d(
     points_3d: np.ndarray,
     image_size: int = IMAGE_SIZE,
 ) -> np.ndarray:
-    """Project N x 3 world points to N x 2 normalized [0,1] pixel coordinates.
+    """Project (N, 3) world points to (N, 2) normalised [0, 1] pixel coordinates.
 
     Uses standard pinhole projection with MuJoCo camera intrinsics/extrinsics.
+
+    Args:
+        model: MuJoCo model.
+        data: MuJoCo data.
+        camera_name: Name of the camera defined in the MJCF.
+        points_3d: World-frame points, shape (N, 3).
+        image_size: Image resolution (square).
+
+    Returns:
+        Normalised pixel coordinates, shape (N, 2), dtype float32.
+
+    Raises:
+        ValueError: If the camera is not found.
     """
     cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
     if cam_id < 0:
         raise ValueError(f"Camera '{camera_name}' not found")
 
-    # Camera extrinsics
-    cam_pos = data.cam_xpos[cam_id]  # (3,)
-    cam_mat = data.cam_xmat[cam_id].reshape(
-        3, 3
-    )  # (3,3) columns are camera axes in world frame
-
-    # Camera intrinsics from fovy
+    cam_pos = data.cam_xpos[cam_id]
+    cam_mat = data.cam_xmat[cam_id].reshape(3, 3)
     fovy = model.cam_fovy[cam_id]
     f = (image_size / 2.0) / np.tan(np.radians(fovy) / 2.0)
 
-    # Transform to camera frame
-    # MuJoCo camera: x=right, y=up, z=backward (OpenGL convention)
-    points = np.atleast_2d(points_3d)  # (N, 3)
-    rel = points - cam_pos  # (N, 3) vectors from camera to points in world frame
-    cam_coords = rel @ cam_mat  # (N, 3) in camera frame [right, up, backward]
+    # MuJoCo camera axes: x=right, y=up, z=backward (OpenGL convention)
+    points = np.atleast_2d(points_3d)
+    rel = points - cam_pos
+    cam_coords = rel @ cam_mat
 
-    # Perspective divide (z is backward, so depth = -cam_coords[:, 2] would be wrong;
-    # in MuJoCo's OpenGL convention, the camera looks along -z, so depth = cam_coords[:, 2])
-    # Actually: cam_mat columns are [right, up, -forward], so cam_coords[:,2] is the
-    # backward direction. Points in front of the camera have positive cam_coords[:,2].
+    # cam_coords[:,2] is backward; points in front have positive depth
     depth = cam_coords[:, 2]
     depth = np.where(np.abs(depth) < 1e-6, 1e-6, depth)
 
-    # Pixel coordinates (origin at top-left)
-    px = f * cam_coords[:, 0] / depth + image_size / 2.0  # x: right
-    py = -f * cam_coords[:, 1] / depth + image_size / 2.0  # y: down (flip up)
+    px = f * cam_coords[:, 0] / depth + image_size / 2.0
+    py = -f * cam_coords[:, 1] / depth + image_size / 2.0  # flip y (up -> down)
 
-    # Normalize to [0, 1]
     px_norm = px / image_size
     py_norm = py / image_size
 
@@ -85,7 +110,17 @@ def compute_keypoints(
     camera_name: str,
     image_size: int = IMAGE_SIZE,
 ) -> np.ndarray:
-    """Project all KEYPOINT_BODIES to (7, 2) float32 normalized pixel coords."""
+    """Project all KEYPOINT_BODIES to normalised pixel coordinates.
+
+    Args:
+        model: MuJoCo model.
+        data: MuJoCo data.
+        camera_name: Name of the camera defined in the MJCF.
+        image_size: Image resolution (square).
+
+    Returns:
+        Normalised pixel coordinates, shape (7, 2), dtype float32.
+    """
     points_3d = np.array(
         [
             data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)]

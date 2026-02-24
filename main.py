@@ -16,30 +16,25 @@ MENAGERIE_DIR = os.path.join(
 )
 
 
-def main():
-    # Check menagerie is cloned
+def main() -> None:
+    """Run the interactive pick-and-place simulation with a passive viewer."""
     if not os.path.isdir(MENAGERIE_DIR):
         print(f"Error: mujoco_menagerie not found at {MENAGERIE_DIR}")
         print("Run: bash setup_menagerie.sh")
         sys.exit(1)
 
-    # Load environment
     print("Loading scene...")
     env = PickPlaceEnv(SCENE_XML)
     env.reset_to_keyframe("scene_start")
 
-    # Create robot interface and controller
     robot = PandaRobot(env.model, env.data)
     controller = IKController(env.model, env.data, robot)
 
-    # Create task state machine
     task = PickAndPlaceTask(env, robot, controller)
 
-    # Launch viewer
     print("Launching viewer...")
     env.launch_viewer()
 
-    # Main simulation loop
     print("Starting pick-and-place task...")
     last_status = ""
     step_count = 0
@@ -65,7 +60,6 @@ def main():
             print("Keeping viewer open — close the window to exit.")
             break
 
-    # Keep viewer alive after task completion
     while env.is_running():
         env.step()
         env.sync()

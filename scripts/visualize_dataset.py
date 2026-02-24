@@ -129,7 +129,14 @@ DIM_NAMES = {
 
 def visualize_episode(
     dataset: LeRobotDataset, episode_index: int, save_path: str | None = None
-):
+) -> None:
+    """Log all frames of an episode to Rerun.
+
+    Args:
+        dataset: Loaded LeRobot dataset.
+        episode_index: Episode to visualise.
+        save_path: If set, save the recording to this ``.rrd`` file path.
+    """
     rr.init(f"{dataset.repo_id}/episode_{episode_index}", spawn=(save_path is None))
 
     for i in tqdm.tqdm(range(len(dataset)), desc="Logging frames"):
@@ -147,17 +154,13 @@ def visualize_episode(
             if not isinstance(val, np.ndarray):
                 continue
 
-            # Image: 3D array
             if val.ndim == 3:
-                # CHW -> HWC if channel-first
                 if val.shape[0] in (1, 3, 4) and val.shape[0] < val.shape[1]:
-                    val = np.transpose(val, (1, 2, 0))
-                # Float [0,1] -> uint8
+                    val = np.transpose(val, (1, 2, 0))  # CHW -> HWC
                 if val.dtype == np.float32 or val.dtype == np.float64:
                     val = (val * 255).clip(0, 255).astype(np.uint8)
                 rr.log(key, rr.Image(val))
 
-            # 1D tensor: log each dimension as a named scalar
             elif val.ndim == 1:
                 names = DIM_NAMES.get(key)
                 for dim_idx, v in enumerate(val):
@@ -175,7 +178,8 @@ def visualize_episode(
         print(f"Saved to {save_path}")
 
 
-def main():
+def main() -> None:
+    """Parse CLI args and launch Rerun visualisation for a dataset episode."""
     parser = argparse.ArgumentParser(
         description="Visualize a LeRobot dataset episode in Rerun"
     )

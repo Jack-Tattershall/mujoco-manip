@@ -97,14 +97,29 @@ FEATURES = {
 
 
 def make_task_string(obj_name: str, bin_name: str) -> str:
-    """Create a human-readable task description."""
+    """Create a human-readable task description.
+
+    Args:
+        obj_name: Object body name (e.g. ``"obj_red"``).
+        bin_name: Bin body name (e.g. ``"bin_red"``).
+
+    Returns:
+        Description string like ``"Pick red object and place in red bin"``.
+    """
     obj_color = obj_name.replace("obj_", "")
     bin_color = bin_name.replace("bin_", "")
     return f"Pick {obj_color} object and place in {bin_color} bin"
 
 
 def get_state(robot: PandaRobot) -> np.ndarray:
-    """Get state vector: [ee_xyz(3), gripper_normalized(1), arm_qpos(7)]."""
+    """Build the state vector [ee_xyz(3), gripper_norm(1), arm_qpos(7)].
+
+    Args:
+        robot: Robot interface.
+
+    Returns:
+        State array (11,), dtype float32.
+    """
     gripper_norm = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
     return np.concatenate(
         [
@@ -116,7 +131,14 @@ def get_state(robot: PandaRobot) -> np.ndarray:
 
 
 def get_bin_onehot(bin_name: str) -> np.ndarray:
-    """Get one-hot encoding for target bin."""
+    """Return one-hot encoding (3,) for the target bin.
+
+    Args:
+        bin_name: Bin body name (e.g. ``"bin_red"``).
+
+    Returns:
+        One-hot array (3,), dtype float32.
+    """
     idx = BINS.index(bin_name)
     onehot = np.zeros(3, dtype=np.float32)
     onehot[idx] = 1.0
@@ -127,13 +149,18 @@ def get_actions(
     task: PickAndPlaceTask,
     initial_se3_inv: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Compute FSM's commanded SE(3) in both absolute and relative frames.
+    """Compute the FSM's commanded SE(3) in absolute and relative frames.
 
-    The FSM always commands a position target with downward orientation (TARGET_ORI).
-    We build the absolute target SE(3), then compute T_rel = T_init_inv @ T_target.
+    The FSM always commands a position target with downward orientation
+    (``TARGET_ORI``). We build the absolute target SE(3), then compute
+    ``T_rel = T_init_inv @ T_target``.
+
+    Args:
+        task: Current pick-and-place task state machine.
+        initial_se3_inv: Inverse of the initial EE SE(3) (4, 4).
 
     Returns:
-        (action_8dof, action_10dof, action_8dof_rel, action_10dof_rel)
+        Tuple of (action_8dof, action_10dof, action_8dof_rel, action_10dof_rel).
     """
     target_pos = task._target_pos if task._target_pos is not None else task.robot.ee_pos
     gripper = 1.0 if task.robot.gripper_ctrl == PandaRobot.GRIPPER_OPEN else 0.0
@@ -160,7 +187,19 @@ def run_episode(
     obj_name: str,
     bin_name: str,
 ) -> list[dict]:
-    """Run one expert FSM episode and collect frames."""
+    """Run one expert FSM episode and collect frames.
+
+    Args:
+        env: MuJoCo environment wrapper.
+        robot: Robot control interface.
+        controller: IK controller.
+        renderer: Camera renderer for capturing images.
+        obj_name: Object body name.
+        bin_name: Target bin body name.
+
+    Returns:
+        List of frame dicts matching ``FEATURES``.
+    """
     env.reset_to_keyframe("scene_start")
 
     # Capture initial EE SE(3) and its inverse
@@ -223,7 +262,8 @@ def run_episode(
     return frames
 
 
-def main():
+def main() -> None:
+    """Parse CLI args and generate a LeRobot dataset from expert FSM episodes."""
     parser = argparse.ArgumentParser(
         description="Generate LeRobot dataset from expert FSM"
     )

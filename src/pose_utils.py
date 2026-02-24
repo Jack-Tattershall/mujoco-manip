@@ -1,18 +1,27 @@
 """SE(3) pose utilities for relative-to-initial action representations.
 
 Conventions:
-- Quaternions are (qx, qy, qz, qw) — matching ROS / scipy convention.
-- 6D rotation uses the first two rows of the rotation matrix (Zhou et al. 2019).
-- 8DOF = [x, y, z, qx, qy, qz, qw, gripper]
-- 10DOF = [x, y, z, r11, r12, r13, r21, r22, r23, gripper]
-  where r_ij uses 1-indexed row/col of the rotation matrix.
+    - Quaternions are (qx, qy, qz, qw) — matching ROS / scipy convention.
+    - 6D rotation uses the first two rows of the rotation matrix
+      (Zhou et al. CVPR 2019).
+    - 8DOF = [x, y, z, qx, qy, qz, qw, gripper]
+    - 10DOF = [x, y, z, r11, r12, r13, r21, r22, r23, gripper]
+      where r_ij uses 1-indexed row/col of the rotation matrix.
 """
 
 import numpy as np
 
 
 def pos_rotmat_to_se3(pos: np.ndarray, rotmat: np.ndarray) -> np.ndarray:
-    """Build a 4x4 SE(3) matrix from position (3,) and rotation (3,3)."""
+    """Build a 4x4 SE(3) matrix from position and rotation.
+
+    Args:
+        pos: Translation vector (3,).
+        rotmat: Rotation matrix (3, 3).
+
+    Returns:
+        Homogeneous transform (4, 4).
+    """
     T = np.eye(4, dtype=np.float64)
     T[:3, :3] = rotmat
     T[:3, 3] = pos
@@ -20,7 +29,14 @@ def pos_rotmat_to_se3(pos: np.ndarray, rotmat: np.ndarray) -> np.ndarray:
 
 
 def se3_to_pos_rotmat(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Extract position (3,) and rotation (3,3) from a 4x4 SE(3) matrix."""
+    """Extract position and rotation from a 4x4 SE(3) matrix.
+
+    Args:
+        T: Homogeneous transform (4, 4).
+
+    Returns:
+        Tuple of (position (3,), rotation (3, 3)).
+    """
     return T[:3, 3].copy(), T[:3, :3].copy()
 
 
@@ -30,7 +46,14 @@ def se3_to_pos_rotmat(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def rotmat_to_quat_xyzw(R: np.ndarray) -> np.ndarray:
-    """Convert 3x3 rotation matrix to quaternion (qx, qy, qz, qw)."""
+    """Convert a (3, 3) rotation matrix to (qx, qy, qz, qw) quaternion.
+
+    Args:
+        R: Rotation matrix (3, 3).
+
+    Returns:
+        Quaternion (4,) in (x, y, z, w) order.
+    """
     trace = R[0, 0] + R[1, 1] + R[2, 2]
     if trace > 0:
         s = 2.0 * np.sqrt(trace + 1.0)
@@ -60,7 +83,14 @@ def rotmat_to_quat_xyzw(R: np.ndarray) -> np.ndarray:
 
 
 def quat_xyzw_to_rotmat(q: np.ndarray) -> np.ndarray:
-    """Convert quaternion (qx, qy, qz, qw) to 3x3 rotation matrix."""
+    """Convert a (qx, qy, qz, qw) quaternion to a (3, 3) rotation matrix.
+
+    Args:
+        q: Quaternion (4,) in (x, y, z, w) order.
+
+    Returns:
+        Rotation matrix (3, 3).
+    """
     x, y, z, w = q
     return np.array(
         [
@@ -77,16 +107,38 @@ def quat_xyzw_to_rotmat(q: np.ndarray) -> np.ndarray:
 
 
 def rotmat_to_6d(R: np.ndarray) -> np.ndarray:
-    """Extract 6D rotation: first two rows of the rotation matrix, flattened."""
+    """Flatten the first two rows of a rotation matrix to a 6D vector.
+
+    Args:
+        R: Rotation matrix (3, 3).
+
+    Returns:
+        6D rotation representation (6,), dtype float32.
+    """
     return R[:2, :].flatten().astype(np.float32)
 
 
 def _normalise(v: np.ndarray) -> np.ndarray:
+    """Return unit vector, clamping near-zero norms.
+
+    Args:
+        v: Input vector.
+
+    Returns:
+        Normalised vector.
+    """
     return v / max(np.linalg.norm(v), 1e-12)
 
 
 def rotmat_from_6d(d6: np.ndarray) -> np.ndarray:
-    """Recover full 3x3 rotation from 6D representation via Gram-Schmidt."""
+    """Recover a (3, 3) rotation from a 6D representation via Gram-Schmidt.
+
+    Args:
+        d6: 6D rotation representation (6,).
+
+    Returns:
+        Rotation matrix (3, 3).
+    """
     a1, a2 = d6[:3], d6[3:6]
     b1 = _normalise(a1)
     b2 = _normalise(a2 - np.dot(b1, a2) * b1)
@@ -95,33 +147,63 @@ def rotmat_from_6d(d6: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
-# 8DOF / 10DOF ↔ SE(3) conversion
+# 8DOF / 10DOF <-> SE(3) conversion
 # ---------------------------------------------------------------------------
 
 
 def se3_to_8dof(T: np.ndarray, gripper: float) -> np.ndarray:
-    """SE(3) + gripper → 8DOF [x,y,z, qx,qy,qz,qw, gripper]."""
+    """Convert SE(3) + gripper to 8DOF vector.
+
+    Args:
+        T: Homogeneous transform (4, 4).
+        gripper: Gripper value in [0, 1].
+
+    Returns:
+        Array [x, y, z, qx, qy, qz, qw, gripper] (8,), dtype float32.
+    """
     pos, R = se3_to_pos_rotmat(T)
     q = rotmat_to_quat_xyzw(R)
     return np.array([*pos, *q, gripper], dtype=np.float32)
 
 
 def se3_to_10dof(T: np.ndarray, gripper: float) -> np.ndarray:
-    """SE(3) + gripper → 10DOF [x,y,z, r11..r23, gripper]."""
+    """Convert SE(3) + gripper to 10DOF vector.
+
+    Args:
+        T: Homogeneous transform (4, 4).
+        gripper: Gripper value in [0, 1].
+
+    Returns:
+        Array [x, y, z, r11..r23, gripper] (10,), dtype float32.
+    """
     pos, R = se3_to_pos_rotmat(T)
     rot6 = rotmat_to_6d(R)
     return np.array([*pos, *rot6, gripper], dtype=np.float32)
 
 
 def se3_from_8dof(dof8: np.ndarray) -> np.ndarray:
-    """Parse 8DOF [x,y,z, qx,qy,qz,qw, gripper] → 4x4 SE(3). Gripper ignored."""
+    """Parse 8DOF vector to 4x4 SE(3). Gripper value is ignored.
+
+    Args:
+        dof8: Array [x, y, z, qx, qy, qz, qw, gripper] (8,).
+
+    Returns:
+        Homogeneous transform (4, 4).
+    """
     pos = dof8[:3]
     R = quat_xyzw_to_rotmat(dof8[3:7])
     return pos_rotmat_to_se3(pos, R)
 
 
 def se3_from_10dof(dof10: np.ndarray) -> np.ndarray:
-    """Parse 10DOF [x,y,z, r11..r23, gripper] → 4x4 SE(3). Gripper ignored."""
+    """Parse 10DOF vector to 4x4 SE(3). Gripper value is ignored.
+
+    Args:
+        dof10: Array [x, y, z, r11..r23, gripper] (10,).
+
+    Returns:
+        Homogeneous transform (4, 4).
+    """
     pos = dof10[:3]
     R = rotmat_from_6d(dof10[3:9])
     return pos_rotmat_to_se3(pos, R)

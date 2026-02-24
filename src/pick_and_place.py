@@ -45,35 +45,57 @@ class PickAndPlaceTask:
     """Finite state machine that picks objects and places them in bins."""
 
     def __init__(
-        self, env: PickPlaceEnv, robot: PandaRobot, controller: IKController, tasks=None
-    ):
+        self,
+        env: PickPlaceEnv,
+        robot: PandaRobot,
+        controller: IKController,
+        tasks: list[tuple[str, str]] | None = None,
+    ) -> None:
+        """Initialise the task state machine.
+
+        Args:
+            env: MuJoCo environment wrapper.
+            robot: Robot control interface.
+            controller: IK controller for computing joint targets.
+            tasks: List of ``(object_body, bin_body)`` pairs. Defaults to
+                ``TASKS`` (colour-matched).
+        """
         self.env = env
         self.robot = robot
         self.controller = controller
         self._tasks = tasks or TASKS
-        self.state = State.IDLE
-        self.task_index = 0
-        self.settle_counter = 0
-        self._target_pos = None
+        self.state: State = State.IDLE
+        self.task_index: int = 0
+        self.settle_counter: int = 0
+        self._target_pos: np.ndarray | None = None
 
     @property
     def is_done(self) -> bool:
+        """Return True if all tasks have been completed."""
         return self.state == State.DONE
 
     def _obj_name(self) -> str:
+        """Return the current object body name."""
         return self._tasks[self.task_index][0]
 
     def _bin_name(self) -> str:
+        """Return the current bin body name."""
         return self._tasks[self.task_index][1]
 
     def _obj_xy(self) -> np.ndarray:
+        """Return XY position (2,) of the current object."""
         return self.env.get_body_pos(self._obj_name())[:2]
 
     def _bin_xy(self) -> np.ndarray:
+        """Return XY position (2,) of the current bin."""
         return self.env.get_body_pos(self._bin_name())[:2]
 
     def update(self) -> str:
-        """Advance the state machine by one tick. Returns a status string."""
+        """Advance the state machine by one tick.
+
+        Returns:
+            Human-readable status string.
+        """
 
         if self.state == State.IDLE:
             if self.task_index >= len(self._tasks):
