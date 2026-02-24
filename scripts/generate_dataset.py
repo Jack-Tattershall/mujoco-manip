@@ -14,7 +14,7 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
-from src.cameras import CameraRenderer, compute_keypoints  # noqa: E402
+from src.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d  # noqa: E402
 from src.constants import ACTION_REPEAT, BINS, CONTROL_FPS, IMAGE_SIZE, TASK_SETS  # noqa: E402
 from src.controller import IKController, TARGET_ORI  # noqa: E402
 from src.env import PickPlaceEnv  # noqa: E402
@@ -116,6 +116,7 @@ def run_episode(
     renderer: CameraRenderer,
     obj_name: str,
     bin_name: str,
+    feature_keys: set[str],
 ) -> list[dict]:
     """Run one expert FSM episode and collect frames.
 
@@ -126,22 +127,59 @@ def run_episode(
         renderer: Camera renderer for capturing images.
         obj_name: Object body name.
         bin_name: Target bin body name.
+        feature_keys: Set of feature keys to include in each frame.
 
     Returns:
-        List of frame dicts matching ``FEATURES``.
+        List of frame dicts with only the requested features.
     """
     env.reset_to_keyframe("scene_start")
 
-    # Capture initial EE SE(3) and its inverse
-    initial_se3 = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
-    initial_se3_inv = np.linalg.inv(initial_se3)
+    # Check which feature groups are needed
+    need_images = bool(
+        feature_keys & {"observation.images.overhead", "observation.images.wrist"}
+    )
+    need_keypoints = bool(
+        feature_keys & {"observation.keypoints_overhead", "observation.keypoints_wrist"}
+    )
+    need_target_kp = "observation.target_keypoints_overhead" in feature_keys
+    need_state = bool(
+        feature_keys
+        & {
+            "observation.state",
+            "observation.state.ee.8dof",
+            "observation.state.ee.10dof",
+            "observation.state.ee.8dof_rel",
+            "observation.state.ee.10dof_rel",
+        }
+    )
+    need_actions = bool(
+        feature_keys
+        & {
+            "action.ee.8dof",
+            "action.ee.10dof",
+            "action.ee.8dof_rel",
+            "action.ee.10dof_rel",
+        }
+    )
+    need_onehot = "observation.target_bin_onehot" in feature_keys
+
+    # Capture initial EE SE(3) and its inverse (needed for actions and relative states)
+    need_initial_se3 = need_actions or (
+        need_state
+        and feature_keys
+        & {"observation.state.ee.8dof_rel", "observation.state.ee.10dof_rel"}
+    )
+    initial_se3_inv = None
+    if need_initial_se3:
+        initial_se3 = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
+        initial_se3_inv = np.linalg.inv(initial_se3)
 
     task = PickAndPlaceTask(env, robot, controller, tasks=[(obj_name, bin_name)])
 
     frames = []
     physics_step = 0
     task_str = make_task_string(obj_name, bin_name)
-    bin_onehot = get_bin_onehot(bin_name)
+    bin_onehot = get_bin_onehot(bin_name) if need_onehot else None
 
     while not task.is_done:
         task.update()
@@ -152,41 +190,107 @@ def run_episode(
         if physics_step % ACTION_REPEAT == 0:
             mujoco.mj_forward(env.model, env.data)
 
-            img_overhead = renderer.render(env.data, "overhead")
-            img_wrist = renderer.render(env.data, "wrist")
-            kp_overhead = compute_keypoints(env.model, env.data, "overhead").flatten()
-            kp_wrist = compute_keypoints(env.model, env.data, "wrist").flatten()
+            frame: dict = {"task": task_str}
 
-            action_8dof, action_10dof, action_8dof_rel, action_10dof_rel = get_actions(
-                task, initial_se3_inv
-            )
+            # Images
+            if need_images:
+                if "observation.images.overhead" in feature_keys:
+                    frame["observation.images.overhead"] = renderer.render(
+                        env.data, "overhead"
+                    )
+                if "observation.images.wrist" in feature_keys:
+                    frame["observation.images.wrist"] = renderer.render(
+                        env.data, "wrist"
+                    )
 
-            # Current EE pose (absolute and relative to initial)
-            T_current = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
-            T_rel_obs = initial_se3_inv @ T_current
-            gripper_val = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
-            obs_state_8dof = se3_to_8dof(T_current, gripper_val)
-            obs_state_10dof = se3_to_10dof(T_current, gripper_val)
-            obs_state_8dof_rel = se3_to_8dof(T_rel_obs, gripper_val)
-            obs_state_10dof_rel = se3_to_10dof(T_rel_obs, gripper_val)
+            # Keypoints
+            if need_keypoints:
+                if "observation.keypoints_overhead" in feature_keys:
+                    frame["observation.keypoints_overhead"] = compute_keypoints(
+                        env.model, env.data, "overhead"
+                    ).flatten()
+                if "observation.keypoints_wrist" in feature_keys:
+                    frame["observation.keypoints_wrist"] = compute_keypoints(
+                        env.model, env.data, "wrist"
+                    ).flatten()
 
-            frame = {
-                "task": task_str,
-                "observation.images.overhead": img_overhead,
-                "observation.images.wrist": img_wrist,
-                "observation.state": get_state(robot),
-                "observation.state.ee.8dof": obs_state_8dof,
-                "observation.state.ee.10dof": obs_state_10dof,
-                "observation.state.ee.8dof_rel": obs_state_8dof_rel,
-                "observation.state.ee.10dof_rel": obs_state_10dof_rel,
-                "action.ee.8dof": action_8dof,
-                "action.ee.10dof": action_10dof,
-                "action.ee.8dof_rel": action_8dof_rel,
-                "action.ee.10dof_rel": action_10dof_rel,
-                "observation.target_bin_onehot": bin_onehot.copy(),
-                "observation.keypoints_overhead": kp_overhead,
-                "observation.keypoints_wrist": kp_wrist,
-            }
+            # Target keypoints
+            if need_target_kp:
+                target_3d = np.array(
+                    [
+                        env.data.xpos[
+                            mujoco.mj_name2id(
+                                env.model, mujoco.mjtObj.mjOBJ_BODY, obj_name
+                            )
+                        ],
+                        env.data.xpos[
+                            mujoco.mj_name2id(
+                                env.model, mujoco.mjtObj.mjOBJ_BODY, bin_name
+                            )
+                        ],
+                    ]
+                )
+                frame["observation.target_keypoints_overhead"] = project_3d_to_2d(
+                    env.model, env.data, "overhead", target_3d, IMAGE_SIZE
+                ).flatten()
+
+            # State variants
+            if need_state:
+                if "observation.state" in feature_keys:
+                    frame["observation.state"] = get_state(robot)
+
+                # SE3-derived states share some computation
+                need_ee = feature_keys & {
+                    "observation.state.ee.8dof",
+                    "observation.state.ee.10dof",
+                    "observation.state.ee.8dof_rel",
+                    "observation.state.ee.10dof_rel",
+                }
+                if need_ee:
+                    T_current = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
+                    gripper_val = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
+
+                    if "observation.state.ee.8dof" in feature_keys:
+                        frame["observation.state.ee.8dof"] = se3_to_8dof(
+                            T_current, gripper_val
+                        )
+                    if "observation.state.ee.10dof" in feature_keys:
+                        frame["observation.state.ee.10dof"] = se3_to_10dof(
+                            T_current, gripper_val
+                        )
+
+                    if feature_keys & {
+                        "observation.state.ee.8dof_rel",
+                        "observation.state.ee.10dof_rel",
+                    }:
+                        T_rel_obs = initial_se3_inv @ T_current
+                        if "observation.state.ee.8dof_rel" in feature_keys:
+                            frame["observation.state.ee.8dof_rel"] = se3_to_8dof(
+                                T_rel_obs, gripper_val
+                            )
+                        if "observation.state.ee.10dof_rel" in feature_keys:
+                            frame["observation.state.ee.10dof_rel"] = se3_to_10dof(
+                                T_rel_obs, gripper_val
+                            )
+
+            # Actions
+            if need_actions:
+                action_8dof, action_10dof, action_8dof_rel, action_10dof_rel = (
+                    get_actions(task, initial_se3_inv)
+                )
+                if "action.ee.8dof" in feature_keys:
+                    frame["action.ee.8dof"] = action_8dof
+                if "action.ee.10dof" in feature_keys:
+                    frame["action.ee.10dof"] = action_10dof
+                if "action.ee.8dof_rel" in feature_keys:
+                    frame["action.ee.8dof_rel"] = action_8dof_rel
+                if "action.ee.10dof_rel" in feature_keys:
+                    frame["action.ee.10dof_rel"] = action_10dof_rel
+
+            # Task context
+            if need_onehot:
+                frame["observation.target_bin_onehot"] = bin_onehot.copy()
+
             frames.append(frame)
 
     return frames
@@ -204,6 +308,18 @@ def main(cfg: DictConfig) -> None:
         )
 
     task_list = TASK_SETS[cfg.tasks]
+
+    # Filter features if a subset is specified
+    features = FEATURES
+    if cfg.features is not None:
+        requested = list(cfg.features)
+        unknown = [k for k in requested if k not in FEATURES]
+        if unknown:
+            raise ValueError(
+                f"Unknown feature keys: {unknown}. Valid keys: {list(FEATURES.keys())}"
+            )
+        features = {k: FEATURES[k] for k in requested}
+    feature_keys = set(features)
 
     # Import LeRobot (handle both old and new import paths)
     try:
@@ -224,7 +340,7 @@ def main(cfg: DictConfig) -> None:
     dataset = LeRobotDataset.create(
         repo_id=cfg.repo_id,
         fps=CONTROL_FPS,
-        features=FEATURES,
+        features=features,
         root=dataset_path,
         robot_type="franka_panda",
         use_videos=False,
@@ -243,7 +359,9 @@ def main(cfg: DictConfig) -> None:
             flush=True,
         )
 
-        frames = run_episode(env, robot, controller, renderer, obj_name, bin_name)
+        frames = run_episode(
+            env, robot, controller, renderer, obj_name, bin_name, feature_keys
+        )
 
         for frame in frames:
             dataset.add_frame(frame)

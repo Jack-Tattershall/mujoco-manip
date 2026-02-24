@@ -78,6 +78,11 @@ FEATURES = {
         "shape": (14,),
         "names": None,
     },
+    "observation.target_keypoints_overhead": {
+        "dtype": "float32",
+        "shape": (4,),
+        "names": None,
+    },
 }
 
 DIM_NAMES: dict[str, list[str]] = {
@@ -188,4 +193,5 @@ DIM_NAMES: dict[str, list[str]] = {
         "hand_u",
         "hand_v",
     ],
+    "observation.target_keypoints_overhead": ["obj_u", "obj_v", "bin_u", "bin_v"],
 }

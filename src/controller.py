@@ -5,7 +5,7 @@ import numpy as np
 
 from .robot import PandaRobot
 
-_HOME_QPOS = np.array([0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853])
+_HOME_QPOS = np.array([1.5708, -0.2, 0.0, -2.1, 0.0, 1.8, 0.785])
 
 # Target orientation: gripper pointing straight down (from home pose)
 # x=[0,1,0], y=[1,0,0], z=[0,0,-1]

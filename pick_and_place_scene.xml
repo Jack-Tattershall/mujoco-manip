@@ -126,12 +126,12 @@
   </worldbody>
 
   <keyframe>
-    <!-- Home pose: arm joints + finger joints, then object free-joint states (7 each: pos3 + quat4) -->
+    <!-- Ready pose: arm extended over workspace, gripper open, then object free-joint states (7 each: pos3 + quat4) -->
     <key name="scene_start"
-         qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04
+         qpos="1.5708 -0.2 0 -2.1 0 1.8 0.785 0.04 0.04
                -0.15 0.45 0.26 1 0 0 0
                 0.0  0.45 0.26 1 0 0 0
                 0.15 0.45 0.26 1 0 0 0"
-         ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 255"/>
+         ctrl="1.5708 -0.2 0 -2.1 0 1.8 0.785 255"/>
   </keyframe>
 </mujoco>
