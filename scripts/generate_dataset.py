@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 import hydra
 import mujoco
@@ -194,6 +195,9 @@ def run_episode(
 @hydra.main(config_path="../configs", config_name="generate", version_base=None)
 def main(cfg: DictConfig) -> None:
     """Generate a LeRobot dataset from expert FSM episodes."""
+    if not cfg.repo_id:
+        raise ValueError("repo_id is required (e.g. repo_id=user/pick-place)")
+
     if cfg.tasks not in TASK_SETS:
         raise ValueError(
             f"Unknown task set '{cfg.tasks}'. Choose from: {list(TASK_SETS.keys())}"
@@ -215,7 +219,7 @@ def main(cfg: DictConfig) -> None:
     renderer = CameraRenderer(env.model, IMAGE_SIZE, IMAGE_SIZE)
 
     # Create dataset — nest under root/repo_id so multiple datasets coexist
-    dataset_path = os.path.join(cfg.root, cfg.repo_id)
+    dataset_path = Path(cfg.root) / cfg.repo_id
     print(f"Creating dataset: {cfg.repo_id} → {dataset_path}")
     dataset = LeRobotDataset.create(
         repo_id=cfg.repo_id,

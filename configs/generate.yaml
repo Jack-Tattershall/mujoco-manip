@@ -1,4 +1,4 @@
-repo_id: ???          # required (e.g. user/pick-place)
+repo_id: null
 num_episodes: 100
 root: ./datasets
 tasks: all
