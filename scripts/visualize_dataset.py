@@ -73,10 +73,15 @@ KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]]
             ("hand", (255, 255, 255)),
         ],
     ),
-    "observation.target_keypoints_overhead": (
+    "observation.target_obj_keypoints_overhead": (
         "observation.images.overhead",
         [
             ("obj", (255, 255, 0)),
+        ],
+    ),
+    "observation.target_bin_keypoints_overhead": (
+        "observation.images.overhead",
+        [
             ("bin", (0, 255, 255)),
         ],
     ),
@@ -84,6 +89,7 @@ KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]]
 
 SPECIAL_KEYS: set[str] = {
     "observation.target_bin_onehot",
+    "observation.target_obj_onehot",
 }
 
 MARKER_RADIUS: int = 4
@@ -253,6 +259,12 @@ def visualize_episode(
             if isinstance(val, torch.Tensor):
                 val = val.numpy()
             rr.log("observation/target_bin_onehot", rr.BarChart(val))
+
+        if "observation.target_obj_onehot" in frame:
+            val = frame["observation.target_obj_onehot"]
+            if isinstance(val, torch.Tensor):
+                val = val.numpy()
+            rr.log("observation/target_obj_onehot", rr.BarChart(val))
 
     if save_path:
         save_path = Path(save_path)

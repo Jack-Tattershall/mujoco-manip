@@ -15,7 +15,14 @@ _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
 from src.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d  # noqa: E402
-from src.constants import ACTION_REPEAT, BINS, CONTROL_FPS, IMAGE_SIZE, TASK_SETS  # noqa: E402
+from src.constants import (  # noqa: E402
+    ACTION_REPEAT,
+    BINS,
+    CONTROL_FPS,
+    IMAGE_SIZE,
+    OBJECTS,
+    TASK_SETS,
+)
 from src.controller import IKController, TARGET_ORI  # noqa: E402
 from src.env import PickPlaceEnv  # noqa: E402
 from src.features import FEATURES  # noqa: E402
@@ -70,6 +77,21 @@ def get_bin_onehot(bin_name: str) -> np.ndarray:
         One-hot array (3,), dtype float32.
     """
     idx = BINS.index(bin_name)
+    onehot = np.zeros(3, dtype=np.float32)
+    onehot[idx] = 1.0
+    return onehot
+
+
+def get_obj_onehot(obj_name: str) -> np.ndarray:
+    """Return one-hot encoding (3,) for the target object.
+
+    Args:
+        obj_name: Object body name (e.g. ``"obj_red"``).
+
+    Returns:
+        One-hot array (3,), dtype float32.
+    """
+    idx = OBJECTS.index(obj_name)
     onehot = np.zeros(3, dtype=np.float32)
     onehot[idx] = 1.0
     return onehot
@@ -141,7 +163,8 @@ def run_episode(
     need_keypoints = bool(
         feature_keys & {"observation.keypoints_overhead", "observation.keypoints_wrist"}
     )
-    need_target_kp = "observation.target_keypoints_overhead" in feature_keys
+    need_target_obj_kp = "observation.target_obj_keypoints_overhead" in feature_keys
+    need_target_bin_kp = "observation.target_bin_keypoints_overhead" in feature_keys
     need_state = bool(
         feature_keys
         & {
@@ -161,7 +184,8 @@ def run_episode(
             "action.ee.10dof_rel",
         }
     )
-    need_onehot = "observation.target_bin_onehot" in feature_keys
+    need_bin_onehot = "observation.target_bin_onehot" in feature_keys
+    need_obj_onehot = "observation.target_obj_onehot" in feature_keys
 
     # Capture initial EE SE(3) and its inverse (needed for actions and relative states)
     need_initial_se3 = need_actions or (
@@ -179,7 +203,8 @@ def run_episode(
     frames = []
     physics_step = 0
     task_str = make_task_string(obj_name, bin_name)
-    bin_onehot = get_bin_onehot(bin_name) if need_onehot else None
+    bin_onehot = get_bin_onehot(bin_name) if need_bin_onehot else None
+    obj_onehot = get_obj_onehot(obj_name) if need_obj_onehot else None
 
     while not task.is_done:
         task.update()
@@ -214,24 +239,20 @@ def run_episode(
                         env.model, env.data, "wrist"
                     ).flatten()
 
-            # Target keypoints
-            if need_target_kp:
-                target_3d = np.array(
-                    [
-                        env.data.xpos[
-                            mujoco.mj_name2id(
-                                env.model, mujoco.mjtObj.mjOBJ_BODY, obj_name
-                            )
-                        ],
-                        env.data.xpos[
-                            mujoco.mj_name2id(
-                                env.model, mujoco.mjtObj.mjOBJ_BODY, bin_name
-                            )
-                        ],
-                    ]
-                )
-                frame["observation.target_keypoints_overhead"] = project_3d_to_2d(
-                    env.model, env.data, "overhead", target_3d, IMAGE_SIZE
+            # Target keypoints (obj and bin projected separately)
+            if need_target_obj_kp:
+                obj_3d = env.data.xpos[
+                    mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, obj_name)
+                ][np.newaxis]
+                frame["observation.target_obj_keypoints_overhead"] = project_3d_to_2d(
+                    env.model, env.data, "overhead", obj_3d, IMAGE_SIZE
+                ).flatten()
+            if need_target_bin_kp:
+                bin_3d = env.data.xpos[
+                    mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, bin_name)
+                ][np.newaxis]
+                frame["observation.target_bin_keypoints_overhead"] = project_3d_to_2d(
+                    env.model, env.data, "overhead", bin_3d, IMAGE_SIZE
                 ).flatten()
 
             # State variants
@@ -288,8 +309,10 @@ def run_episode(
                     frame["action.ee.10dof_rel"] = action_10dof_rel
 
             # Task context
-            if need_onehot:
+            if need_bin_onehot:
                 frame["observation.target_bin_onehot"] = bin_onehot.copy()
+            if need_obj_onehot:
+                frame["observation.target_obj_onehot"] = obj_onehot.copy()
 
             frames.append(frame)
 

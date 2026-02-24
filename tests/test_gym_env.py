@@ -105,9 +105,11 @@ class TestConstruction:
             "state.ee.8dof_rel",
             "state.ee.10dof_rel",
             "target_bin_onehot",
+            "target_obj_onehot",
             "keypoints_overhead",
             "keypoints_wrist",
-            "target_keypoints_overhead",
+            "target_obj_keypoints_overhead",
+            "target_bin_keypoints_overhead",
         }
         assert set(env.observation_space.spaces.keys()) == expected
 
@@ -131,9 +133,11 @@ class TestReset:
         assert obs["state.ee.8dof_rel"].shape == (8,)
         assert obs["state.ee.10dof_rel"].shape == (10,)
         assert obs["target_bin_onehot"].shape == (3,)
+        assert obs["target_obj_onehot"].shape == (3,)
         assert obs["keypoints_overhead"].shape == (len(KEYPOINT_BODIES), 2)
         assert obs["keypoints_wrist"].shape == (len(KEYPOINT_BODIES), 2)
-        assert obs["target_keypoints_overhead"].shape == (2, 2)
+        assert obs["target_obj_keypoints_overhead"].shape == (2,)
+        assert obs["target_bin_keypoints_overhead"].shape == (2,)
 
     def test_reset_obs_dtypes(self, env):
         obs, _ = env.reset()
@@ -141,12 +145,20 @@ class TestReset:
         assert obs["image_wrist"].dtype == np.uint8
         assert obs["state"].dtype == np.float32
         assert obs["target_bin_onehot"].dtype == np.float32
+        assert obs["target_obj_onehot"].dtype == np.float32
         assert obs["keypoints_overhead"].dtype == np.float32
-        assert obs["target_keypoints_overhead"].dtype == np.float32
+        assert obs["target_obj_keypoints_overhead"].dtype == np.float32
+        assert obs["target_bin_keypoints_overhead"].dtype == np.float32
 
     def test_reset_target_bin_onehot_is_valid(self, env):
         obs, _ = env.reset()
         oh = obs["target_bin_onehot"]
+        assert oh.sum() == pytest.approx(1.0)
+        assert set(np.unique(oh)).issubset({0.0, 1.0})
+
+    def test_reset_target_obj_onehot_is_valid(self, env):
+        obs, _ = env.reset()
+        oh = obs["target_obj_onehot"]
         assert oh.sum() == pytest.approx(1.0)
         assert set(np.unique(oh)).issubset({0.0, 1.0})
 
@@ -440,6 +452,8 @@ class TestTaskSelection:
             obs, _ = e.reset()
             # bin_green is index 1
             np.testing.assert_array_equal(obs["target_bin_onehot"], [0, 1, 0])
+            # obj_blue is index 2
+            np.testing.assert_array_equal(obs["target_obj_onehot"], [0, 0, 1])
         finally:
             e.close()
 
@@ -547,24 +561,24 @@ class TestRelativePoseMath:
 # ---------------------------------------------------------------------------
 
 
-class TestTargetKeypointsOverhead:
+class TestTargetObjKeypointsOverhead:
     def test_shape_and_dtype(self, env):
         obs, _ = env.reset()
-        kp = obs["target_keypoints_overhead"]
-        assert kp.shape == (2, 2)
+        kp = obs["target_obj_keypoints_overhead"]
+        assert kp.shape == (2,)
         assert kp.dtype == np.float32
 
     def test_values_in_unit_range(self, env):
         obs, _ = env.reset()
-        kp = obs["target_keypoints_overhead"]
+        kp = obs["target_obj_keypoints_overhead"]
         assert np.all(kp >= 0.0) and np.all(kp <= 1.0)
 
     def test_constant_across_steps(self, env):
         obs, _ = env.reset()
-        kp_reset = obs["target_keypoints_overhead"].copy()
+        kp_reset = obs["target_obj_keypoints_overhead"].copy()
         for _ in range(3):
             obs, *_ = env.step(env.action_space.sample())
-        kp_step = obs["target_keypoints_overhead"]
+        kp_step = obs["target_obj_keypoints_overhead"]
         np.testing.assert_array_equal(kp_reset, kp_step)
 
     def test_different_tasks_give_different_keypoints(self):
@@ -577,10 +591,50 @@ class TestTargetKeypointsOverhead:
         try:
             obs1, _ = e1.reset()
             obs2, _ = e2.reset()
-            kp1 = obs1["target_keypoints_overhead"]
-            kp2 = obs2["target_keypoints_overhead"]
+            kp1 = obs1["target_obj_keypoints_overhead"]
+            kp2 = obs2["target_obj_keypoints_overhead"]
             assert not np.allclose(kp1, kp2), (
-                "Different tasks should produce different target keypoints"
+                "Different tasks should produce different target obj keypoints"
+            )
+        finally:
+            e1.close()
+            e2.close()
+
+
+class TestTargetBinKeypointsOverhead:
+    def test_shape_and_dtype(self, env):
+        obs, _ = env.reset()
+        kp = obs["target_bin_keypoints_overhead"]
+        assert kp.shape == (2,)
+        assert kp.dtype == np.float32
+
+    def test_values_in_unit_range(self, env):
+        obs, _ = env.reset()
+        kp = obs["target_bin_keypoints_overhead"]
+        assert np.all(kp >= 0.0) and np.all(kp <= 1.0)
+
+    def test_constant_across_steps(self, env):
+        obs, _ = env.reset()
+        kp_reset = obs["target_bin_keypoints_overhead"].copy()
+        for _ in range(3):
+            obs, *_ = env.step(env.action_space.sample())
+        kp_step = obs["target_bin_keypoints_overhead"]
+        np.testing.assert_array_equal(kp_reset, kp_step)
+
+    def test_different_tasks_give_different_keypoints(self):
+        e1 = PickPlaceGymEnv(
+            action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=10
+        )
+        e2 = PickPlaceGymEnv(
+            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+        )
+        try:
+            obs1, _ = e1.reset()
+            obs2, _ = e2.reset()
+            kp1 = obs1["target_bin_keypoints_overhead"]
+            kp2 = obs2["target_bin_keypoints_overhead"]
+            assert not np.allclose(kp1, kp2), (
+                "Different tasks should produce different target bin keypoints"
             )
         finally:
             e1.close()

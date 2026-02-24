@@ -14,6 +14,7 @@ from .constants import (
     IMAGE_SIZE,
     KEYPOINT_BODIES,
     MAX_EPISODE_STEPS,
+    OBJECTS,
     TASK_SETS,
 )
 from .controller import IKController
@@ -105,7 +106,8 @@ class PickPlaceGymEnv(gym.Env):
         self._bin_name: str = ""
 
         self._initial_ee_se3: np.ndarray | None = None
-        self._target_kp_overhead: np.ndarray | None = None
+        self._target_obj_kp_overhead: np.ndarray | None = None
+        self._target_bin_kp_overhead: np.ndarray | None = None
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -143,14 +145,18 @@ class PickPlaceGymEnv(gym.Env):
                     -np.inf, np.inf, (10,), dtype=np.float32
                 ),
                 "target_bin_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
+                "target_obj_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
                 "keypoints_overhead": spaces.Box(
                     0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32
                 ),
                 "keypoints_wrist": spaces.Box(
                     0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32
                 ),
-                "target_keypoints_overhead": spaces.Box(
-                    0.0, 1.0, (2, 2), dtype=np.float32
+                "target_obj_keypoints_overhead": spaces.Box(
+                    0.0, 1.0, (2,), dtype=np.float32
+                ),
+                "target_bin_keypoints_overhead": spaces.Box(
+                    0.0, 1.0, (2,), dtype=np.float32
                 ),
             }
         )
@@ -211,8 +217,12 @@ class PickPlaceGymEnv(gym.Env):
         )
 
         bin_idx = BINS.index(self._bin_name)
-        onehot = np.zeros(3, dtype=np.float32)
-        onehot[bin_idx] = 1.0
+        bin_onehot = np.zeros(3, dtype=np.float32)
+        bin_onehot[bin_idx] = 1.0
+
+        obj_idx = OBJECTS.index(self._obj_name)
+        obj_onehot = np.zeros(3, dtype=np.float32)
+        obj_onehot[obj_idx] = 1.0
 
         T_current = pos_rotmat_to_se3(self._robot.ee_pos, self._robot.ee_xmat)
         T_rel = np.linalg.inv(self._initial_ee_se3) @ T_current
@@ -233,10 +243,12 @@ class PickPlaceGymEnv(gym.Env):
             "state.ee.10dof": state_10dof,
             "state.ee.8dof_rel": state_8dof_rel,
             "state.ee.10dof_rel": state_10dof_rel,
-            "target_bin_onehot": onehot,
+            "target_bin_onehot": bin_onehot,
+            "target_obj_onehot": obj_onehot,
             "keypoints_overhead": kp_overhead,
             "keypoints_wrist": kp_wrist,
-            "target_keypoints_overhead": self._target_kp_overhead,
+            "target_obj_keypoints_overhead": self._target_obj_kp_overhead,
+            "target_bin_keypoints_overhead": self._target_bin_kp_overhead,
         }
 
     def _compute_reward(self) -> tuple[float, bool]:
@@ -298,23 +310,18 @@ class PickPlaceGymEnv(gym.Env):
             self._obj_name, self._bin_name = self._task_pool[idx]
 
         model, data = self._env.model, self._env.data
-        target_3d = np.array(
-            [
-                data.xpos[
-                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._obj_name)
-                ],
-                data.xpos[
-                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._bin_name)
-                ],
-            ]
-        )
-        self._target_kp_overhead = project_3d_to_2d(
-            model,
-            data,
-            "overhead",
-            target_3d,
-            self._image_size,
-        )
+        obj_3d = data.xpos[
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._obj_name)
+        ][np.newaxis]
+        bin_3d = data.xpos[
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._bin_name)
+        ][np.newaxis]
+        self._target_obj_kp_overhead = project_3d_to_2d(
+            model, data, "overhead", obj_3d, self._image_size
+        ).flatten()
+        self._target_bin_kp_overhead = project_3d_to_2d(
+            model, data, "overhead", bin_3d, self._image_size
+        ).flatten()
 
         obs = self._get_obs()
         return obs, {}

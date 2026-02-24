@@ -94,12 +94,6 @@ uv run python scripts/replay_actions.py \
     --episode-index 0 --slow 2
 ```
 
-The built-in `lerobot-dataset-viz` CLI is also available but only shows images and basic action/state scalars:
-
-```bash
-uv run lerobot-dataset-viz --repo-id user/pick-place --root ./datasets --episode-index 0 --display-compressed-images 0
-```
-
 ## Run tests
 
 ```bash

@@ -15,9 +15,11 @@ features:  # null for all, or a subset of these keys
   - action.ee.8dof_rel
   - action.ee.10dof_rel
   - observation.target_bin_onehot
+  - observation.target_obj_onehot
   - observation.keypoints_overhead
   - observation.keypoints_wrist
-  - observation.target_keypoints_overhead
+  - observation.target_obj_keypoints_overhead
+  - observation.target_bin_keypoints_overhead
 
 hydra:
   job:
