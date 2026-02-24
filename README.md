@@ -60,38 +60,20 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-cross num_epis
 
 ## Visualise a dataset
 
-Custom visualizer that logs **all** dataset features to [Rerun](https://rerun.io/) — images, EE states (8dof/10dof), actions, keypoints, and target bin one-hot — with named scalar dimensions.
+Logs all dataset features to [Rerun](https://rerun.io/) — images, states, actions, keypoints, onehots, and 3D trails.
 
 ```bash
-# Open Rerun viewer for episode 0
 uv run python scripts/visualize_dataset.py --repo-id user/pick-place --root ./datasets --episode-index 0
-
-# Save a .rrd file for later viewing
-uv run python scripts/visualize_dataset.py --repo-id user/pick-place --root ./datasets --episode-index 0 --save ./viz/ep0.rrd
-rerun ./viz/ep0.rrd
 ```
-
-The visualizer also logs 3D point trails in Rerun under the `3d/` entity tree — EE state (green), action targets (red), and reconstructed relative actions (blue) — for spatial verification of recorded trajectories.
 
 ## Replay actions in MuJoCo
 
-Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify they reproduce the original trajectory.
+Feeds recorded actions back through IK in the MuJoCo viewer to verify trajectories.
 
 ```bash
-# Replay absolute 8DOF actions
-uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --action-key action.ee.8dof
-
-# Replay relative actions (reconstructed via T_initial)
 uv run python scripts/replay_actions.py \
     --repo-id user/pick-place --root ./datasets/user/pick-place \
     --episode-index 0 --action-key action.ee.8dof_rel
-
-# Slow motion (2x slower)
-uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --slow 2
 ```
 
 ## Push a dataset to Hugging Face
