@@ -31,7 +31,13 @@ sys.path.insert(0, _PROJECT_ROOT)
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 
 from src.features import DIM_NAMES  # noqa: E402
-from src.pose_utils import se3_from_8dof, se3_from_10dof  # noqa: E402
+from src.pose_utils import (  # noqa: E402
+    pos_rotmat_to_se3,
+    se3_from_8dof,
+    se3_from_10dof,
+)
+
+SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 
 SKIP_KEYS = {
     "frame_index",
@@ -115,22 +121,41 @@ def visualize_episode(
     print(f"Dataset features: {feature_keys}")
 
     # --- 3D trail accumulation ---
-    ee_trail: list[list[float]] = []
-    action_trail: list[list[float]] = []
+    # Two 3D views: state_3d (observation EE) and action_3d (action targets).
+    # Each shows absolute (green) vs relative-reconstructed (blue) overlay.
+    state_abs_trail: list[list[float]] = []
+    state_rel_trail: list[list[float]] = []
+    action_abs_trail: list[list[float]] = []
     action_rel_trail: list[list[float]] = []
     T_initial: np.ndarray | None = None
 
-    # Determine which relative action/state keys are present
+    # Determine which keys are present
     first_frame = dataset[0]
+    has_state_8dof = "observation.state.ee.8dof" in first_frame
+    has_state_rel_8dof = "observation.state.ee.8dof_rel" in first_frame
+    has_state_rel_10dof = "observation.state.ee.10dof_rel" in first_frame
     has_action_8dof = "action.ee.8dof" in first_frame
     has_action_rel_8dof = "action.ee.8dof_rel" in first_frame
     has_action_rel_10dof = "action.ee.10dof_rel" in first_frame
-    has_state_8dof = "observation.state.ee.8dof" in first_frame
 
-    # Build T_initial from first frame's EE state for relative action reconstruction
-    if has_state_8dof and (has_action_rel_8dof or has_action_rel_10dof):
-        state_8dof_0 = first_frame["observation.state.ee.8dof"].numpy()
-        T_initial = se3_from_8dof(state_8dof_0)
+    # Build T_initial from the sim's EE pose right after reset_to_keyframe,
+    # matching how generate_dataset.py captures initial_se3 before any physics
+    # steps (frame 0's observation is recorded 16 steps later, so it differs).
+    has_any_rel = (
+        has_state_rel_8dof
+        or has_state_rel_10dof
+        or has_action_rel_8dof
+        or has_action_rel_10dof
+    )
+    if has_any_rel:
+        from src.env import PickPlaceEnv  # noqa: E402
+        from src.robot import PandaRobot  # noqa: E402
+
+        _env = PickPlaceEnv(SCENE_XML, add_wrist_camera=False)
+        _robot = PandaRobot(_env.model, _env.data)
+        _env.reset_to_keyframe("scene_start")
+        T_initial = pos_rotmat_to_se3(_robot.ee_pos, _robot.ee_xmat)
+        del _env, _robot
 
     for i in tqdm.tqdm(range(len(dataset)), desc="Logging frames"):
         frame = dataset[i]
@@ -191,47 +216,55 @@ def visualize_episode(
                 rr.log(f"{key}/{name}", rr.Scalars(float(v)))
 
         # --- 3D trail logging ---
+        # state_3d: absolute (green) vs relative-reconstructed (blue)
         if has_state_8dof:
             ee_xyz = frame["observation.state.ee.8dof"].numpy()[:3].tolist()
-            ee_trail.append(ee_xyz)
-            rr.log("3d/ee_state", rr.Points3D([ee_xyz], colors=[[0, 200, 0]]))
-            rr.log("3d/ee_trail", rr.LineStrips3D([ee_trail], colors=[[0, 200, 0]]))
-
-        if has_action_8dof:
-            act_xyz = frame["action.ee.8dof"].numpy()[:3].tolist()
-            action_trail.append(act_xyz)
-            rr.log("3d/action_target", rr.Points3D([act_xyz], colors=[[200, 0, 0]]))
+            state_abs_trail.append(ee_xyz)
+            rr.log("state_3d/abs", rr.Points3D([ee_xyz], colors=[[0, 200, 0]]))
             rr.log(
-                "3d/action_trail", rr.LineStrips3D([action_trail], colors=[[200, 0, 0]])
+                "state_3d/abs_trail",
+                rr.LineStrips3D([state_abs_trail], colors=[[0, 200, 0]]),
             )
 
-        if T_initial is not None:
+        if T_initial is not None and (has_state_rel_8dof or has_state_rel_10dof):
+            if has_state_rel_8dof:
+                rel = frame["observation.state.ee.8dof_rel"].numpy()
+                T_abs = T_initial @ se3_from_8dof(rel)
+            else:
+                rel = frame["observation.state.ee.10dof_rel"].numpy()
+                T_abs = T_initial @ se3_from_10dof(rel)
+            rel_xyz = T_abs[:3, 3].tolist()
+            state_rel_trail.append(rel_xyz)
+            rr.log("state_3d/rel", rr.Points3D([rel_xyz], colors=[[0, 100, 255]]))
+            rr.log(
+                "state_3d/rel_trail",
+                rr.LineStrips3D([state_rel_trail], colors=[[0, 100, 255]]),
+            )
+
+        # action_3d: absolute (green) vs relative-reconstructed (blue)
+        if has_action_8dof:
+            act_xyz = frame["action.ee.8dof"].numpy()[:3].tolist()
+            action_abs_trail.append(act_xyz)
+            rr.log("action_3d/abs", rr.Points3D([act_xyz], colors=[[0, 200, 0]]))
+            rr.log(
+                "action_3d/abs_trail",
+                rr.LineStrips3D([action_abs_trail], colors=[[0, 200, 0]]),
+            )
+
+        if T_initial is not None and (has_action_rel_8dof or has_action_rel_10dof):
             if has_action_rel_8dof:
-                rel_8dof = frame["action.ee.8dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_8dof(rel_8dof)
-                rel_xyz = T_abs[:3, 3].tolist()
-                action_rel_trail.append(rel_xyz)
-                rr.log(
-                    "3d/action_rel_reconstructed",
-                    rr.Points3D([rel_xyz], colors=[[0, 100, 255]]),
-                )
-                rr.log(
-                    "3d/action_rel_trail",
-                    rr.LineStrips3D([action_rel_trail], colors=[[0, 100, 255]]),
-                )
-            elif has_action_rel_10dof:
-                rel_10dof = frame["action.ee.10dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_10dof(rel_10dof)
-                rel_xyz = T_abs[:3, 3].tolist()
-                action_rel_trail.append(rel_xyz)
-                rr.log(
-                    "3d/action_rel_reconstructed",
-                    rr.Points3D([rel_xyz], colors=[[0, 100, 255]]),
-                )
-                rr.log(
-                    "3d/action_rel_trail",
-                    rr.LineStrips3D([action_rel_trail], colors=[[0, 100, 255]]),
-                )
+                rel = frame["action.ee.8dof_rel"].numpy()
+                T_abs = T_initial @ se3_from_8dof(rel)
+            else:
+                rel = frame["action.ee.10dof_rel"].numpy()
+                T_abs = T_initial @ se3_from_10dof(rel)
+            rel_xyz = T_abs[:3, 3].tolist()
+            action_rel_trail.append(rel_xyz)
+            rr.log("action_3d/rel", rr.Points3D([rel_xyz], colors=[[0, 100, 255]]))
+            rr.log(
+                "action_3d/rel_trail",
+                rr.LineStrips3D([action_rel_trail], colors=[[0, 100, 255]]),
+            )
 
         # target_bin_onehot as bar chart
         if "observation.target_bin_onehot" in frame:
