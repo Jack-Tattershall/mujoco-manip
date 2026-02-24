@@ -14,6 +14,8 @@ Examples:
 """
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,110 +23,16 @@ import rerun as rr
 import torch
 import tqdm
 
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+# Add project root to path
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
+sys.path.insert(0, _PROJECT_ROOT)
+
+from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
+
+from src.features import DIM_NAMES  # noqa: E402
 
 SKIP_KEYS = {"frame_index", "episode_index", "index", "timestamp", "task_index", "task"}
-
-DIM_NAMES = {
-    "observation.state": [
-        "ee_x",
-        "ee_y",
-        "ee_z",
-        "gripper",
-        "q0",
-        "q1",
-        "q2",
-        "q3",
-        "q4",
-        "q5",
-        "q6",
-    ],
-    "observation.state.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "observation.state.ee.10dof": [
-        "x",
-        "y",
-        "z",
-        "r11",
-        "r12",
-        "r13",
-        "r21",
-        "r22",
-        "r23",
-        "gripper",
-    ],
-    "observation.state.ee.8dof_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "observation.state.ee.10dof_rel": [
-        "x",
-        "y",
-        "z",
-        "r11",
-        "r12",
-        "r13",
-        "r21",
-        "r22",
-        "r23",
-        "gripper",
-    ],
-    "action.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "action.ee.10dof": [
-        "x",
-        "y",
-        "z",
-        "r11",
-        "r12",
-        "r13",
-        "r21",
-        "r22",
-        "r23",
-        "gripper",
-    ],
-    "action.ee.8dof_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "action.ee.10dof_rel": [
-        "x",
-        "y",
-        "z",
-        "r11",
-        "r12",
-        "r13",
-        "r21",
-        "r22",
-        "r23",
-        "gripper",
-    ],
-    "observation.target_bin_onehot": ["red", "green", "blue"],
-    "observation.keypoints_overhead": [
-        "red_u",
-        "red_v",
-        "green_u",
-        "green_v",
-        "blue_u",
-        "blue_v",
-        "bin_red_u",
-        "bin_red_v",
-        "bin_green_u",
-        "bin_green_v",
-        "bin_blue_u",
-        "bin_blue_v",
-        "hand_u",
-        "hand_v",
-    ],
-    "observation.keypoints_wrist": [
-        "red_u",
-        "red_v",
-        "green_u",
-        "green_v",
-        "blue_u",
-        "blue_v",
-        "bin_red_u",
-        "bin_red_v",
-        "bin_green_u",
-        "bin_green_v",
-        "bin_blue_u",
-        "bin_blue_v",
-        "hand_u",
-        "hand_v",
-    ],
-}
 
 
 def visualize_episode(

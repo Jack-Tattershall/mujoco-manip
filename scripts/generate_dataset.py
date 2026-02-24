@@ -1,11 +1,12 @@
 """Generate a LeRobot v3.0 dataset from expert FSM demonstrations."""
 
-import argparse
 import os
 import sys
 
+import hydra
 import mujoco
 import numpy as np
+from omegaconf import DictConfig
 
 # Add project root to path
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,84 +17,12 @@ from src.cameras import CameraRenderer, compute_keypoints  # noqa: E402
 from src.constants import ACTION_REPEAT, BINS, CONTROL_FPS, IMAGE_SIZE, TASK_SETS  # noqa: E402
 from src.controller import IKController, TARGET_ORI  # noqa: E402
 from src.env import PickPlaceEnv  # noqa: E402
+from src.features import FEATURES  # noqa: E402
 from src.pick_and_place import PickAndPlaceTask  # noqa: E402
 from src.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof  # noqa: E402
 from src.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
-
-FEATURES = {
-    "observation.images.overhead": {
-        "dtype": "image",
-        "shape": (IMAGE_SIZE, IMAGE_SIZE, 3),
-        "names": ["height", "width", "channels"],
-    },
-    "observation.images.wrist": {
-        "dtype": "image",
-        "shape": (IMAGE_SIZE, IMAGE_SIZE, 3),
-        "names": ["height", "width", "channels"],
-    },
-    "observation.state": {
-        "dtype": "float32",
-        "shape": (11,),
-        "names": None,
-    },
-    "observation.state.ee.8dof": {
-        "dtype": "float32",
-        "shape": (8,),
-        "names": None,
-    },
-    "observation.state.ee.10dof": {
-        "dtype": "float32",
-        "shape": (10,),
-        "names": None,
-    },
-    "observation.state.ee.8dof_rel": {
-        "dtype": "float32",
-        "shape": (8,),
-        "names": None,
-    },
-    "observation.state.ee.10dof_rel": {
-        "dtype": "float32",
-        "shape": (10,),
-        "names": None,
-    },
-    "action.ee.8dof": {
-        "dtype": "float32",
-        "shape": (8,),
-        "names": None,
-    },
-    "action.ee.10dof": {
-        "dtype": "float32",
-        "shape": (10,),
-        "names": None,
-    },
-    "action.ee.8dof_rel": {
-        "dtype": "float32",
-        "shape": (8,),
-        "names": None,
-    },
-    "action.ee.10dof_rel": {
-        "dtype": "float32",
-        "shape": (10,),
-        "names": None,
-    },
-    "observation.target_bin_onehot": {
-        "dtype": "float32",
-        "shape": (3,),
-        "names": None,
-    },
-    "observation.keypoints_overhead": {
-        "dtype": "float32",
-        "shape": (14,),
-        "names": None,
-    },
-    "observation.keypoints_wrist": {
-        "dtype": "float32",
-        "shape": (14,),
-        "names": None,
-    },
-}
 
 
 def make_task_string(obj_name: str, bin_name: str) -> str:
@@ -262,33 +191,15 @@ def run_episode(
     return frames
 
 
-def main() -> None:
-    """Parse CLI args and generate a LeRobot dataset from expert FSM episodes."""
-    parser = argparse.ArgumentParser(
-        description="Generate LeRobot dataset from expert FSM"
-    )
-    parser.add_argument(
-        "--repo-id",
-        type=str,
-        required=True,
-        help="Dataset repo ID (e.g. user/pick-place)",
-    )
-    parser.add_argument(
-        "--num-episodes", type=int, default=100, help="Total number of episodes"
-    )
-    parser.add_argument(
-        "--root", type=str, default="./datasets", help="Local dataset root directory"
-    )
-    parser.add_argument(
-        "--tasks",
-        type=str,
-        default="all",
-        choices=list(TASK_SETS.keys()),
-        help="Task set: 'all' (9 combos), 'match' (color-matched), 'cross' (cross-color)",
-    )
-    args = parser.parse_args()
+@hydra.main(config_path="../configs", config_name="generate", version_base=None)
+def main(cfg: DictConfig) -> None:
+    """Generate a LeRobot dataset from expert FSM episodes."""
+    if cfg.tasks not in TASK_SETS:
+        raise ValueError(
+            f"Unknown task set '{cfg.tasks}'. Choose from: {list(TASK_SETS.keys())}"
+        )
 
-    task_list = TASK_SETS[args.tasks]
+    task_list = TASK_SETS[cfg.tasks]
 
     # Import LeRobot (handle both old and new import paths)
     try:
@@ -304,25 +215,25 @@ def main() -> None:
     renderer = CameraRenderer(env.model, IMAGE_SIZE, IMAGE_SIZE)
 
     # Create dataset
-    print(f"Creating dataset: {args.repo_id}")
+    print(f"Creating dataset: {cfg.repo_id}")
     dataset = LeRobotDataset.create(
-        repo_id=args.repo_id,
+        repo_id=cfg.repo_id,
         fps=CONTROL_FPS,
         features=FEATURES,
-        root=args.root,
+        root=cfg.root,
         robot_type="franka_panda",
         use_videos=False,
         image_writer_threads=4,
     )
 
     # Generate episodes, cycling through tasks
-    print(f"Task set '{args.tasks}': {len(task_list)} task(s)")
-    for ep_idx in range(args.num_episodes):
+    print(f"Task set '{cfg.tasks}': {len(task_list)} task(s)")
+    for ep_idx in range(cfg.num_episodes):
         task_idx = ep_idx % len(task_list)
         obj_name, bin_name = task_list[task_idx]
 
         print(
-            f"Episode {ep_idx + 1}/{args.num_episodes}: {obj_name} → {bin_name}",
+            f"Episode {ep_idx + 1}/{cfg.num_episodes}: {obj_name} → {bin_name}",
             end="",
             flush=True,
         )
@@ -338,8 +249,8 @@ def main() -> None:
     # Finalize
     dataset.finalize()
     renderer.close()
-    print(f"\nDataset saved to {args.root}/{args.repo_id}")
-    print(f"Total episodes: {args.num_episodes}")
+    print(f"\nDataset saved to {cfg.root}/{cfg.repo_id}")
+    print(f"Total episodes: {cfg.num_episodes}")
 
 
 if __name__ == "__main__":

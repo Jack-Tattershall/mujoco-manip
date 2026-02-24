@@ -1,0 +1,10 @@
+repo_id: ???          # required (e.g. user/pick-place)
+num_episodes: 100
+root: ./datasets
+tasks: all
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
