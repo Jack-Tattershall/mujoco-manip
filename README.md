@@ -94,6 +94,16 @@ uv run python scripts/replay_actions.py \
     --episode-index 0 --slow 2
 ```
 
+## Push a dataset to Hugging Face
+
+```bash
+# Login (one-time)
+uv run huggingface-cli login
+
+# Upload to the kinisi org
+uv run huggingface-cli upload kinisi/pick-place ./datasets/user/pick-place --repo-type dataset --private
+```
+
 ## Run tests
 
 ```bash
