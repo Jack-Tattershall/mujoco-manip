@@ -214,13 +214,14 @@ def main(cfg: DictConfig) -> None:
     controller = IKController(env.model, env.data, robot)
     renderer = CameraRenderer(env.model, IMAGE_SIZE, IMAGE_SIZE)
 
-    # Create dataset
-    print(f"Creating dataset: {cfg.repo_id}")
+    # Create dataset — nest under root/repo_id so multiple datasets coexist
+    dataset_path = os.path.join(cfg.root, cfg.repo_id)
+    print(f"Creating dataset: {cfg.repo_id} → {dataset_path}")
     dataset = LeRobotDataset.create(
         repo_id=cfg.repo_id,
         fps=CONTROL_FPS,
         features=FEATURES,
-        root=cfg.root,
+        root=dataset_path,
         robot_type="franka_panda",
         use_videos=False,
         image_writer_threads=4,
@@ -249,7 +250,7 @@ def main(cfg: DictConfig) -> None:
     # Finalize
     dataset.finalize()
     renderer.close()
-    print(f"\nDataset saved to {cfg.root}/{cfg.repo_id}")
+    print(f"\nDataset saved to {dataset_path}")
     print(f"Total episodes: {cfg.num_episodes}")
 
 
