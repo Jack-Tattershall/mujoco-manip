@@ -10,11 +10,13 @@ _HOME_QPOS = np.array([0.0, 0.0, 0.0, -1.57079, 0.0, 1.57079, -0.7853])
 
 # Target orientation: gripper pointing straight down (from home pose)
 # x=[0,1,0], y=[1,0,0], z=[0,0,-1]
-TARGET_ORI = np.array([
-    [0.0, 1.0,  0.0],
-    [1.0, 0.0,  0.0],
-    [0.0, 0.0, -1.0],
-])
+TARGET_ORI = np.array(
+    [
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, -1.0],
+    ]
+)
 
 
 def _orientation_error(R_current: np.ndarray, R_target: np.ndarray) -> np.ndarray:
@@ -24,11 +26,13 @@ def _orientation_error(R_current: np.ndarray, R_target: np.ndarray) -> np.ndarra
     angle = np.arccos(trace_val)
     if angle < 1e-6:
         return np.zeros(3)
-    axis = np.array([
-        R_err[2, 1] - R_err[1, 2],
-        R_err[0, 2] - R_err[2, 0],
-        R_err[1, 0] - R_err[0, 1],
-    ]) / (2 * np.sin(angle))
+    axis = np.array(
+        [
+            R_err[2, 1] - R_err[1, 2],
+            R_err[0, 2] - R_err[2, 0],
+            R_err[1, 0] - R_err[0, 1],
+        ]
+    ) / (2 * np.sin(angle))
     return axis * angle
 
 
@@ -68,9 +72,12 @@ class IKController:
 
         # Compute Jacobians
         mujoco.mj_jac(
-            self.model, self.data,
-            self._jacp, self._jacr,
-            ee_pos, self.robot._ee_body_id,
+            self.model,
+            self.data,
+            self._jacp,
+            self._jacr,
+            ee_pos,
+            self.robot._ee_body_id,
         )
         Jp = self._jacp[:, :n_arm]
         Jr = self._jacr[:, :n_arm]

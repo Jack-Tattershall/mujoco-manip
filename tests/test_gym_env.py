@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from src.constants import ALL_TASKS, BINS, KEYPOINT_BODIES, MATCH_TASKS, MAX_EPISODE_STEPS
+from src.constants import (
+    KEYPOINT_BODIES,
+)
 from src.controller import TARGET_ORI
-from src.gym_env import ACTION_MODES, PickPlaceGymEnv
+from src.gym_env import PickPlaceGymEnv
 from src.pose_utils import (
     pos_rotmat_to_se3,
-    rotmat_from_6d,
     rotmat_to_6d,
-    rotmat_to_quat_xyzw,
     se3_to_8dof,
     se3_to_10dof,
 )
@@ -19,6 +19,7 @@ from src.pose_utils import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(params=["ee_8dof", "ee_10dof"])
 def env(request):
@@ -34,21 +35,27 @@ def env(request):
 
 @pytest.fixture
 def env_8dof():
-    e = PickPlaceGymEnv(action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=50)
+    e = PickPlaceGymEnv(
+        action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=50
+    )
     yield e
     e.close()
 
 
 @pytest.fixture
 def env_10dof():
-    e = PickPlaceGymEnv(action_mode="ee_10dof", task=("obj_red", "bin_red"), max_episode_steps=50)
+    e = PickPlaceGymEnv(
+        action_mode="ee_10dof", task=("obj_red", "bin_red"), max_episode_steps=50
+    )
     yield e
     e.close()
 
 
 @pytest.fixture
 def env_abs():
-    e = PickPlaceGymEnv(action_mode="abs_pos", task=("obj_red", "bin_red"), max_episode_steps=50)
+    e = PickPlaceGymEnv(
+        action_mode="abs_pos", task=("obj_red", "bin_red"), max_episode_steps=50
+    )
     yield e
     e.close()
 
@@ -56,6 +63,7 @@ def env_abs():
 # ---------------------------------------------------------------------------
 # Construction
 # ---------------------------------------------------------------------------
+
 
 class TestConstruction:
     def test_invalid_action_mode_raises(self):
@@ -88,18 +96,26 @@ class TestConstruction:
         assert np.all(env_10dof.action_space.high[:9] == np.inf)
 
     def test_observation_space_keys(self, env):
-        expected = {"image_overhead", "image_wrist", "state",
-                    "state.ee.8dof", "state.ee.10dof",
-                    "state.ee.8dof_rel", "state.ee.10dof_rel",
-                    "target_bin_onehot",
-                    "keypoints_overhead", "keypoints_wrist",
-                    "target_keypoints_overhead"}
+        expected = {
+            "image_overhead",
+            "image_wrist",
+            "state",
+            "state.ee.8dof",
+            "state.ee.10dof",
+            "state.ee.8dof_rel",
+            "state.ee.10dof_rel",
+            "target_bin_onehot",
+            "keypoints_overhead",
+            "keypoints_wrist",
+            "target_keypoints_overhead",
+        }
         assert set(env.observation_space.spaces.keys()) == expected
 
 
 # ---------------------------------------------------------------------------
 # Reset
 # ---------------------------------------------------------------------------
+
 
 class TestReset:
     def test_reset_returns_obs_and_info(self, env):
@@ -159,6 +175,7 @@ class TestReset:
 # Step basics
 # ---------------------------------------------------------------------------
 
+
 class TestStep:
     def test_step_returns_five_tuple(self, env):
         env.reset()
@@ -175,7 +192,9 @@ class TestStep:
         obs_reset, _ = env.reset()
         obs_step, *_ = env.step(env.action_space.sample())
         for key in obs_reset:
-            assert obs_step[key].shape == obs_reset[key].shape, f"Shape mismatch for {key}"
+            assert obs_step[key].shape == obs_reset[key].shape, (
+                f"Shape mismatch for {key}"
+            )
 
     def test_step_increments_count(self, env):
         env.reset()
@@ -194,6 +213,7 @@ class TestStep:
 # ---------------------------------------------------------------------------
 # Identity action (relative pose = identity → stay at initial position)
 # ---------------------------------------------------------------------------
+
 
 class TestIdentityAction:
     """Sending the identity relative pose should keep the EE near its initial position."""
@@ -236,12 +256,12 @@ class TestIdentityAction:
 # Known displacement (relative pose → EE moves to expected world position)
 # ---------------------------------------------------------------------------
 
+
 class TestKnownDisplacement:
     """A relative translation should move the EE by that amount in the initial frame."""
 
     def test_8dof_translation_moves_ee(self, env_8dof):
         obs, _ = env_8dof.reset()
-        initial_ee = obs["state"][:3].copy()
         T_init = env_8dof._initial_ee_se3.copy()
 
         # Command: move 0.1m along the initial frame's x-axis, identity rotation, gripper open
@@ -283,17 +303,22 @@ class TestKnownDisplacement:
 # Gripper control
 # ---------------------------------------------------------------------------
 
+
 class TestGripperControl:
     def _make_open_action(self, mode):
         if mode == "ee_8dof":
-            return np.array([0, 0, 0, 0, 0, 0, 1, 1.0], dtype=np.float32)  # gripper=1 → open
+            return np.array(
+                [0, 0, 0, 0, 0, 0, 1, 1.0], dtype=np.float32
+            )  # gripper=1 → open
         else:
             d6 = rotmat_to_6d(np.eye(3))
             return np.array([0, 0, 0, *d6, 1.0], dtype=np.float32)
 
     def _make_close_action(self, mode):
         if mode == "ee_8dof":
-            return np.array([0, 0, 0, 0, 0, 0, 1, 0.0], dtype=np.float32)  # gripper=0 → close
+            return np.array(
+                [0, 0, 0, 0, 0, 0, 1, 0.0], dtype=np.float32
+            )  # gripper=0 → close
         else:
             d6 = rotmat_to_6d(np.eye(3))
             return np.array([0, 0, 0, *d6, 0.0], dtype=np.float32)
@@ -323,6 +348,7 @@ class TestGripperControl:
 # 8dof ↔ 10dof consistency: same relative SE(3) produces same world target
 # ---------------------------------------------------------------------------
 
+
 class TestCrossModeParity:
     """The same relative SE(3) encoded as 8dof or 10dof should yield the same EE target."""
 
@@ -344,13 +370,18 @@ class TestCrossModeParity:
 
         ee8 = obs8["state"][:3]
         ee10 = obs10["state"][:3]
-        np.testing.assert_allclose(ee8, ee10, atol=0.01,
-                                   err_msg="8dof and 10dof should drive EE to the same position")
+        np.testing.assert_allclose(
+            ee8,
+            ee10,
+            atol=0.01,
+            err_msg="8dof and 10dof should drive EE to the same position",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Truncation
 # ---------------------------------------------------------------------------
+
 
 class TestTruncation:
     def test_truncates_at_max_steps(self, env):
@@ -372,6 +403,7 @@ class TestTruncation:
 # ---------------------------------------------------------------------------
 # Reward
 # ---------------------------------------------------------------------------
+
 
 class TestReward:
     def test_dense_reward_is_float(self, env):
@@ -398,9 +430,12 @@ class TestReward:
 # Task selection
 # ---------------------------------------------------------------------------
 
+
 class TestTaskSelection:
     def test_fixed_task(self):
-        e = PickPlaceGymEnv(action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10)
+        e = PickPlaceGymEnv(
+            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+        )
         try:
             obs, _ = e.reset()
             # bin_green is index 1
@@ -436,6 +471,7 @@ class TestTaskSelection:
 # Render
 # ---------------------------------------------------------------------------
 
+
 class TestRender:
     def test_render_returns_image(self, env):
         env.reset()
@@ -448,6 +484,7 @@ class TestRender:
 # ---------------------------------------------------------------------------
 # Relative pose math end-to-end inside the env
 # ---------------------------------------------------------------------------
+
 
 class TestRelativePoseMath:
     """Verify the internal _relative_action_to_world_pos method."""
@@ -509,6 +546,7 @@ class TestRelativePoseMath:
 # Target keypoints (overhead)
 # ---------------------------------------------------------------------------
 
+
 class TestTargetKeypointsOverhead:
     def test_shape_and_dtype(self, env):
         obs, _ = env.reset()
@@ -530,14 +568,20 @@ class TestTargetKeypointsOverhead:
         np.testing.assert_array_equal(kp_reset, kp_step)
 
     def test_different_tasks_give_different_keypoints(self):
-        e1 = PickPlaceGymEnv(action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=10)
-        e2 = PickPlaceGymEnv(action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10)
+        e1 = PickPlaceGymEnv(
+            action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=10
+        )
+        e2 = PickPlaceGymEnv(
+            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+        )
         try:
             obs1, _ = e1.reset()
             obs2, _ = e2.reset()
             kp1 = obs1["target_keypoints_overhead"]
             kp2 = obs2["target_keypoints_overhead"]
-            assert not np.allclose(kp1, kp2), "Different tasks should produce different target keypoints"
+            assert not np.allclose(kp1, kp2), (
+                "Different tasks should produce different target keypoints"
+            )
         finally:
             e1.close()
             e2.close()
@@ -546,6 +590,7 @@ class TestTargetKeypointsOverhead:
 # ---------------------------------------------------------------------------
 # Multiple resets don't leak state
 # ---------------------------------------------------------------------------
+
 
 class TestMultipleResets:
     def test_reset_clears_step_count(self, env):

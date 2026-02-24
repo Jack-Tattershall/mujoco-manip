@@ -11,7 +11,9 @@ import numpy as np
 _PANDA_INCLUDE = 'file="third_party/mujoco_menagerie/franka_emika_panda/panda.xml"'
 
 
-def _load_scene(xml_path: str, panda_dir: str, add_wrist_camera: bool = False) -> mujoco.MjModel:
+def _load_scene(
+    xml_path: str, panda_dir: str, add_wrist_camera: bool = False
+) -> mujoco.MjModel:
     """Load the scene XML from the panda model directory.
 
     MuJoCo resolves <include> and meshdir relative to the loading file's
@@ -26,7 +28,7 @@ def _load_scene(xml_path: str, panda_dir: str, add_wrist_camera: bool = False) -
     # Rewrite include to local panda.xml (will be in the same directory)
     xml = xml.replace(_PANDA_INCLUDE, 'file="panda.xml"')
     # Remove our compiler tag (let panda.xml's compiler handle meshdir)
-    xml = xml.replace('<compiler angle="radian"/>\n\n', '')
+    xml = xml.replace('<compiler angle="radian"/>\n\n', "")
 
     # Write into panda directory and load from there
     abs_panda_dir = os.path.abspath(panda_dir)
@@ -41,7 +43,12 @@ def _load_scene(xml_path: str, panda_dir: str, add_wrist_camera: bool = False) -
             cam = hand.add_camera()
             cam.name = "wrist"
             cam.pos = [0.0, 0.0, 0.04]
-            cam.quat = [0.0, 0.0, 1.0, 0.0]  # 180° around y so camera looks along hand +z (downward)
+            cam.quat = [
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+            ]  # 180° around y so camera looks along hand +z (downward)
             return spec.compile()
         else:
             return mujoco.MjModel.from_xml_path(tmp_path)
@@ -52,7 +59,12 @@ def _load_scene(xml_path: str, panda_dir: str, add_wrist_camera: bool = False) -
 class PickPlaceEnv:
     """Loads the MJCF scene, manages simulation stepping and viewer."""
 
-    def __init__(self, xml_path: str, panda_dir: str | None = None, add_wrist_camera: bool = False):
+    def __init__(
+        self,
+        xml_path: str,
+        panda_dir: str | None = None,
+        add_wrist_camera: bool = False,
+    ):
         if panda_dir is None:
             project_root = os.path.dirname(os.path.abspath(xml_path))
             panda_dir = os.path.join(

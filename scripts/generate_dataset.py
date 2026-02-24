@@ -12,13 +12,13 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
-from src.cameras import CameraRenderer, compute_keypoints
-from src.constants import ACTION_REPEAT, BINS, CONTROL_FPS, IMAGE_SIZE, TASK_SETS
-from src.controller import IKController, TARGET_ORI
-from src.env import PickPlaceEnv
-from src.pick_and_place import PickAndPlaceTask
-from src.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof
-from src.robot import PandaRobot
+from src.cameras import CameraRenderer, compute_keypoints  # noqa: E402
+from src.constants import ACTION_REPEAT, BINS, CONTROL_FPS, IMAGE_SIZE, TASK_SETS  # noqa: E402
+from src.controller import IKController, TARGET_ORI  # noqa: E402
+from src.env import PickPlaceEnv  # noqa: E402
+from src.pick_and_place import PickAndPlaceTask  # noqa: E402
+from src.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof  # noqa: E402
+from src.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 
@@ -106,11 +106,13 @@ def make_task_string(obj_name: str, bin_name: str) -> str:
 def get_state(robot: PandaRobot) -> np.ndarray:
     """Get state vector: [ee_xyz(3), gripper_normalized(1), arm_qpos(7)]."""
     gripper_norm = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
-    return np.concatenate([
-        robot.ee_pos.astype(np.float32),
-        np.array([gripper_norm], dtype=np.float32),
-        robot.arm_qpos.astype(np.float32),
-    ])
+    return np.concatenate(
+        [
+            robot.ee_pos.astype(np.float32),
+            np.array([gripper_norm], dtype=np.float32),
+            robot.arm_qpos.astype(np.float32),
+        ]
+    )
 
 
 def get_bin_onehot(bin_name: str) -> np.ndarray:
@@ -186,7 +188,9 @@ def run_episode(
             kp_overhead = compute_keypoints(env.model, env.data, "overhead").flatten()
             kp_wrist = compute_keypoints(env.model, env.data, "wrist").flatten()
 
-            action_8dof, action_10dof, action_8dof_rel, action_10dof_rel = get_actions(task, initial_se3_inv)
+            action_8dof, action_10dof, action_8dof_rel, action_10dof_rel = get_actions(
+                task, initial_se3_inv
+            )
 
             # Current EE pose (absolute and relative to initial)
             T_current = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
@@ -220,12 +224,28 @@ def run_episode(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate LeRobot dataset from expert FSM")
-    parser.add_argument("--repo-id", type=str, required=True, help="Dataset repo ID (e.g. user/pick-place)")
-    parser.add_argument("--num-episodes", type=int, default=100, help="Total number of episodes")
-    parser.add_argument("--root", type=str, default="./datasets", help="Local dataset root directory")
-    parser.add_argument("--tasks", type=str, default="all", choices=list(TASK_SETS.keys()),
-                        help="Task set: 'all' (9 combos), 'match' (color-matched), 'cross' (cross-color)")
+    parser = argparse.ArgumentParser(
+        description="Generate LeRobot dataset from expert FSM"
+    )
+    parser.add_argument(
+        "--repo-id",
+        type=str,
+        required=True,
+        help="Dataset repo ID (e.g. user/pick-place)",
+    )
+    parser.add_argument(
+        "--num-episodes", type=int, default=100, help="Total number of episodes"
+    )
+    parser.add_argument(
+        "--root", type=str, default="./datasets", help="Local dataset root directory"
+    )
+    parser.add_argument(
+        "--tasks",
+        type=str,
+        default="all",
+        choices=list(TASK_SETS.keys()),
+        help="Task set: 'all' (9 combos), 'match' (color-matched), 'cross' (cross-color)",
+    )
     args = parser.parse_args()
 
     task_list = TASK_SETS[args.tasks]
@@ -261,7 +281,11 @@ def main():
         task_idx = ep_idx % len(task_list)
         obj_name, bin_name = task_list[task_idx]
 
-        print(f"Episode {ep_idx + 1}/{args.num_episodes}: {obj_name} → {bin_name}", end="", flush=True)
+        print(
+            f"Episode {ep_idx + 1}/{args.num_episodes}: {obj_name} → {bin_name}",
+            end="",
+            flush=True,
+        )
 
         frames = run_episode(env, robot, controller, renderer, obj_name, bin_name)
 

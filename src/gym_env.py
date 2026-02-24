@@ -76,7 +76,9 @@ class PickPlaceGymEnv(gym.Env):
         """
         super().__init__()
         if action_mode not in ACTION_MODES:
-            raise ValueError(f"action_mode must be one of {ACTION_MODES}, got '{action_mode}'")
+            raise ValueError(
+                f"action_mode must be one of {ACTION_MODES}, got '{action_mode}'"
+            )
 
         self._xml_path = xml_path
         self._fixed_task = task
@@ -116,36 +118,57 @@ class PickPlaceGymEnv(gym.Env):
         elif action_mode == "ee_8dof":
             low = np.full(8, -np.inf, dtype=np.float32)
             high = np.full(8, np.inf, dtype=np.float32)
-            low[7] = 0.0; high[7] = 1.0  # gripper
+            low[7] = 0.0
+            high[7] = 1.0  # gripper
             self.action_space = spaces.Box(low=low, high=high)
         elif action_mode == "ee_10dof":
             low = np.full(10, -np.inf, dtype=np.float32)
             high = np.full(10, np.inf, dtype=np.float32)
-            low[9] = 0.0; high[9] = 1.0  # gripper
+            low[9] = 0.0
+            high[9] = 1.0  # gripper
             self.action_space = spaces.Box(low=low, high=high)
 
         # Observation space
-        self.observation_space = spaces.Dict({
-            "image_overhead": spaces.Box(0, 255, (image_size, image_size, 3), dtype=np.uint8),
-            "image_wrist": spaces.Box(0, 255, (image_size, image_size, 3), dtype=np.uint8),
-            "state": spaces.Box(-np.inf, np.inf, (11,), dtype=np.float32),
-            "state.ee.8dof": spaces.Box(-np.inf, np.inf, (8,), dtype=np.float32),
-            "state.ee.10dof": spaces.Box(-np.inf, np.inf, (10,), dtype=np.float32),
-            "state.ee.8dof_rel": spaces.Box(-np.inf, np.inf, (8,), dtype=np.float32),
-            "state.ee.10dof_rel": spaces.Box(-np.inf, np.inf, (10,), dtype=np.float32),
-            "target_bin_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
-            "keypoints_overhead": spaces.Box(0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32),
-            "keypoints_wrist": spaces.Box(0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32),
-            "target_keypoints_overhead": spaces.Box(0.0, 1.0, (2, 2), dtype=np.float32),
-        })
+        self.observation_space = spaces.Dict(
+            {
+                "image_overhead": spaces.Box(
+                    0, 255, (image_size, image_size, 3), dtype=np.uint8
+                ),
+                "image_wrist": spaces.Box(
+                    0, 255, (image_size, image_size, 3), dtype=np.uint8
+                ),
+                "state": spaces.Box(-np.inf, np.inf, (11,), dtype=np.float32),
+                "state.ee.8dof": spaces.Box(-np.inf, np.inf, (8,), dtype=np.float32),
+                "state.ee.10dof": spaces.Box(-np.inf, np.inf, (10,), dtype=np.float32),
+                "state.ee.8dof_rel": spaces.Box(
+                    -np.inf, np.inf, (8,), dtype=np.float32
+                ),
+                "state.ee.10dof_rel": spaces.Box(
+                    -np.inf, np.inf, (10,), dtype=np.float32
+                ),
+                "target_bin_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
+                "keypoints_overhead": spaces.Box(
+                    0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32
+                ),
+                "keypoints_wrist": spaces.Box(
+                    0.0, 1.0, (len(KEYPOINT_BODIES), 2), dtype=np.float32
+                ),
+                "target_keypoints_overhead": spaces.Box(
+                    0.0, 1.0, (2, 2), dtype=np.float32
+                ),
+            }
+        )
 
     def _capture_initial_pose(self):
         """Store the initial EE SE(3) pose after reset."""
         self._initial_ee_se3 = pos_rotmat_to_se3(
-            self._robot.ee_pos, self._robot.ee_xmat,
+            self._robot.ee_pos,
+            self._robot.ee_xmat,
         )
 
-    def _relative_action_to_world_pos(self, action: np.ndarray) -> tuple[np.ndarray, float]:
+    def _relative_action_to_world_pos(
+        self, action: np.ndarray
+    ) -> tuple[np.ndarray, float]:
         """Convert a relative-to-initial action to absolute world-frame position + gripper.
 
         Returns:
@@ -175,12 +198,16 @@ class PickPlaceGymEnv(gym.Env):
         img_wrist = self._renderer.render(data, "wrist")
 
         # State: [ee_xyz(3), gripper_normalized(1), arm_qpos(7)]
-        gripper_norm = np.array([self._robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN], dtype=np.float32)
-        state = np.concatenate([
-            self._robot.ee_pos.astype(np.float32),
-            gripper_norm,
-            self._robot.arm_qpos.astype(np.float32),
-        ])
+        gripper_norm = np.array(
+            [self._robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN], dtype=np.float32
+        )
+        state = np.concatenate(
+            [
+                self._robot.ee_pos.astype(np.float32),
+                gripper_norm,
+                self._robot.arm_qpos.astype(np.float32),
+            ]
+        )
 
         # Target bin one-hot
         bin_idx = BINS.index(self._bin_name)
@@ -265,12 +292,22 @@ class PickPlaceGymEnv(gym.Env):
 
         # Cache target keypoints in overhead camera (constant for the episode)
         model, data = self._env.model, self._env.data
-        target_3d = np.array([
-            data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._obj_name)],
-            data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._bin_name)],
-        ])
+        target_3d = np.array(
+            [
+                data.xpos[
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._obj_name)
+                ],
+                data.xpos[
+                    mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self._bin_name)
+                ],
+            ]
+        )
         self._target_kp_overhead = project_3d_to_2d(
-            model, data, "overhead", target_3d, self._image_size,
+            model,
+            data,
+            "overhead",
+            target_3d,
+            self._image_size,
         )
 
         obs = self._get_obs()

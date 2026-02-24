@@ -27,40 +27,109 @@ SKIP_KEYS = {"frame_index", "episode_index", "index", "timestamp", "task_index",
 
 DIM_NAMES = {
     "observation.state": [
-        "ee_x", "ee_y", "ee_z", "gripper",
-        "q0", "q1", "q2", "q3", "q4", "q5", "q6",
+        "ee_x",
+        "ee_y",
+        "ee_z",
+        "gripper",
+        "q0",
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
     ],
     "observation.state.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
     "observation.state.ee.10dof": [
-        "x", "y", "z", "r11", "r12", "r13", "r21", "r22", "r23", "gripper",
+        "x",
+        "y",
+        "z",
+        "r11",
+        "r12",
+        "r13",
+        "r21",
+        "r22",
+        "r23",
+        "gripper",
     ],
     "observation.state.ee.8dof_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
     "observation.state.ee.10dof_rel": [
-        "x", "y", "z", "r11", "r12", "r13", "r21", "r22", "r23", "gripper",
+        "x",
+        "y",
+        "z",
+        "r11",
+        "r12",
+        "r13",
+        "r21",
+        "r22",
+        "r23",
+        "gripper",
     ],
     "action.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
     "action.ee.10dof": [
-        "x", "y", "z", "r11", "r12", "r13", "r21", "r22", "r23", "gripper",
+        "x",
+        "y",
+        "z",
+        "r11",
+        "r12",
+        "r13",
+        "r21",
+        "r22",
+        "r23",
+        "gripper",
     ],
     "action.ee.8dof_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
     "action.ee.10dof_rel": [
-        "x", "y", "z", "r11", "r12", "r13", "r21", "r22", "r23", "gripper",
+        "x",
+        "y",
+        "z",
+        "r11",
+        "r12",
+        "r13",
+        "r21",
+        "r22",
+        "r23",
+        "gripper",
     ],
     "observation.target_bin_onehot": ["red", "green", "blue"],
     "observation.keypoints_overhead": [
-        "red_u", "red_v", "green_u", "green_v", "blue_u", "blue_v",
-        "bin_red_u", "bin_red_v", "bin_green_u", "bin_green_v",
-        "bin_blue_u", "bin_blue_v", "hand_u", "hand_v",
+        "red_u",
+        "red_v",
+        "green_u",
+        "green_v",
+        "blue_u",
+        "blue_v",
+        "bin_red_u",
+        "bin_red_v",
+        "bin_green_u",
+        "bin_green_v",
+        "bin_blue_u",
+        "bin_blue_v",
+        "hand_u",
+        "hand_v",
     ],
     "observation.keypoints_wrist": [
-        "red_u", "red_v", "green_u", "green_v", "blue_u", "blue_v",
-        "bin_red_u", "bin_red_v", "bin_green_u", "bin_green_v",
-        "bin_blue_u", "bin_blue_v", "hand_u", "hand_v",
+        "red_u",
+        "red_v",
+        "green_u",
+        "green_v",
+        "blue_u",
+        "blue_v",
+        "bin_red_u",
+        "bin_red_v",
+        "bin_green_u",
+        "bin_green_v",
+        "bin_blue_u",
+        "bin_blue_v",
+        "hand_u",
+        "hand_v",
     ],
 }
 
 
-def visualize_episode(dataset: LeRobotDataset, episode_index: int, save_path: str | None = None):
+def visualize_episode(
+    dataset: LeRobotDataset, episode_index: int, save_path: str | None = None
+):
     rr.init(f"{dataset.repo_id}/episode_{episode_index}", spawn=(save_path is None))
 
     for i in tqdm.tqdm(range(len(dataset)), desc="Logging frames"):
@@ -92,7 +161,11 @@ def visualize_episode(dataset: LeRobotDataset, episode_index: int, save_path: st
             elif val.ndim == 1:
                 names = DIM_NAMES.get(key)
                 for dim_idx, v in enumerate(val):
-                    name = names[dim_idx] if names and dim_idx < len(names) else str(dim_idx)
+                    name = (
+                        names[dim_idx]
+                        if names and dim_idx < len(names)
+                        else str(dim_idx)
+                    )
                     rr.log(f"{key}/{name}", rr.Scalars(float(v)))
 
     if save_path:
@@ -103,11 +176,27 @@ def visualize_episode(dataset: LeRobotDataset, episode_index: int, save_path: st
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Visualize a LeRobot dataset episode in Rerun")
-    parser.add_argument("--repo-id", type=str, required=True, help="Dataset repo ID (e.g. test/pick-place)")
-    parser.add_argument("--root", type=str, default=None, help="Local dataset root directory")
-    parser.add_argument("--episode-index", type=int, default=0, help="Episode index to visualize")
-    parser.add_argument("--save", type=str, default=None, help="Path to save .rrd file (e.g. ./viz/ep0.rrd)")
+    parser = argparse.ArgumentParser(
+        description="Visualize a LeRobot dataset episode in Rerun"
+    )
+    parser.add_argument(
+        "--repo-id",
+        type=str,
+        required=True,
+        help="Dataset repo ID (e.g. test/pick-place)",
+    )
+    parser.add_argument(
+        "--root", type=str, default=None, help="Local dataset root directory"
+    )
+    parser.add_argument(
+        "--episode-index", type=int, default=0, help="Episode index to visualize"
+    )
+    parser.add_argument(
+        "--save",
+        type=str,
+        default=None,
+        help="Path to save .rrd file (e.g. ./viz/ep0.rrd)",
+    )
     args = parser.parse_args()
 
     dataset = LeRobotDataset(

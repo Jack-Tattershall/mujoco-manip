@@ -11,7 +11,9 @@ from src.pick_and_place import PickAndPlaceTask
 
 
 SCENE_XML = os.path.join(os.path.dirname(__file__), "pick_and_place_scene.xml")
-MENAGERIE_DIR = os.path.join(os.path.dirname(__file__), "third_party", "mujoco_menagerie")
+MENAGERIE_DIR = os.path.join(
+    os.path.dirname(__file__), "third_party", "mujoco_menagerie"
+)
 
 
 def main():
@@ -44,7 +46,11 @@ def main():
 
     while env.is_running():
         status = task.update()
-        if status != last_status and "Gripping" not in status and "Releasing (" not in status:
+        if (
+            status != last_status
+            and "Gripping" not in status
+            and "Releasing (" not in status
+        ):
             print(f"[{step_count:>6d}] {status}")
             last_status = status
         elif status != last_status:

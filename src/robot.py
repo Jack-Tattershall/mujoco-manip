@@ -32,11 +32,11 @@ class PandaRobot:
     @property
     def arm_qpos(self) -> np.ndarray:
         """Current arm joint positions (7,)."""
-        return self.data.qpos[:self.NUM_ARM_JOINTS].copy()
+        return self.data.qpos[: self.NUM_ARM_JOINTS].copy()
 
     def set_arm_ctrl(self, targets: np.ndarray):
         """Set arm actuator control targets (7 values)."""
-        self.data.ctrl[:self.NUM_ARM_JOINTS] = targets
+        self.data.ctrl[: self.NUM_ARM_JOINTS] = targets
 
     def open_gripper(self):
         """Command gripper to open."""

@@ -9,7 +9,9 @@ from .constants import IMAGE_SIZE, KEYPOINT_BODIES
 class CameraRenderer:
     """Wraps mujoco.Renderer for offscreen image rendering."""
 
-    def __init__(self, model: mujoco.MjModel, height: int = IMAGE_SIZE, width: int = IMAGE_SIZE):
+    def __init__(
+        self, model: mujoco.MjModel, height: int = IMAGE_SIZE, width: int = IMAGE_SIZE
+    ):
         self._renderer = mujoco.Renderer(model, height, width)
 
     def render(self, data: mujoco.MjData, camera_name: str) -> np.ndarray:
@@ -45,7 +47,9 @@ def project_3d_to_2d(
 
     # Camera extrinsics
     cam_pos = data.cam_xpos[cam_id]  # (3,)
-    cam_mat = data.cam_xmat[cam_id].reshape(3, 3)  # (3,3) columns are camera axes in world frame
+    cam_mat = data.cam_xmat[cam_id].reshape(
+        3, 3
+    )  # (3,3) columns are camera axes in world frame
 
     # Camera intrinsics from fovy
     fovy = model.cam_fovy[cam_id]
@@ -82,8 +86,10 @@ def compute_keypoints(
     image_size: int = IMAGE_SIZE,
 ) -> np.ndarray:
     """Project all KEYPOINT_BODIES to (7, 2) float32 normalized pixel coords."""
-    points_3d = np.array([
-        data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)]
-        for name in KEYPOINT_BODIES
-    ])
+    points_3d = np.array(
+        [
+            data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)]
+            for name in KEYPOINT_BODIES
+        ]
+    )
     return project_3d_to_2d(model, data, camera_name, points_3d, image_size)

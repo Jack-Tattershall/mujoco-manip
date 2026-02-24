@@ -31,8 +31,8 @@ TASKS = [
 # Heights for the 'hand' body frame
 # Hand-to-finger-pad offset ~0.10m when pointing down
 # Table surface at z=0.24, object center at z=0.26
-PRE_GRASP_HEIGHT = 0.44   # hover above object
-GRASP_HEIGHT = 0.36       # finger pads at cube center level
+PRE_GRASP_HEIGHT = 0.44  # hover above object
+GRASP_HEIGHT = 0.36  # finger pads at cube center level
 LIFT_HEIGHT = 0.50
 PLACE_HEIGHT = 0.45
 RETREAT_HEIGHT = 0.50
@@ -44,7 +44,9 @@ GRIPPER_SETTLE_STEPS = 150
 class PickAndPlaceTask:
     """Finite state machine that picks objects and places them in bins."""
 
-    def __init__(self, env: PickPlaceEnv, robot: PandaRobot, controller: IKController, tasks=None):
+    def __init__(
+        self, env: PickPlaceEnv, robot: PandaRobot, controller: IKController, tasks=None
+    ):
         self.env = env
         self.robot = robot
         self.controller = controller

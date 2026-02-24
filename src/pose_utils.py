@@ -28,6 +28,7 @@ def se3_to_pos_rotmat(T: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 # Quaternion <-> rotation matrix
 # ---------------------------------------------------------------------------
 
+
 def rotmat_to_quat_xyzw(R: np.ndarray) -> np.ndarray:
     """Convert 3x3 rotation matrix to quaternion (qx, qy, qz, qw)."""
     trace = R[0, 0] + R[1, 1] + R[2, 2]
@@ -61,16 +62,19 @@ def rotmat_to_quat_xyzw(R: np.ndarray) -> np.ndarray:
 def quat_xyzw_to_rotmat(q: np.ndarray) -> np.ndarray:
     """Convert quaternion (qx, qy, qz, qw) to 3x3 rotation matrix."""
     x, y, z, w = q
-    return np.array([
-        [1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
-        [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
-        [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)],
-    ])
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
 # 6D rotation representation (Zhou et al. CVPR 2019)
 # ---------------------------------------------------------------------------
+
 
 def rotmat_to_6d(R: np.ndarray) -> np.ndarray:
     """Extract 6D rotation: first two rows of the rotation matrix, flattened."""
@@ -93,6 +97,7 @@ def rotmat_from_6d(d6: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # 8DOF / 10DOF ↔ SE(3) conversion
 # ---------------------------------------------------------------------------
+
 
 def se3_to_8dof(T: np.ndarray, gripper: float) -> np.ndarray:
     """SE(3) + gripper → 8DOF [x,y,z, qx,qy,qz,qw, gripper]."""
