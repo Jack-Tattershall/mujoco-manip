@@ -71,6 +71,29 @@ uv run python scripts/visualize_dataset.py --repo-id user/pick-place --root ./da
 rerun ./viz/ep0.rrd
 ```
 
+The visualizer also logs 3D point trails in Rerun under the `3d/` entity tree — EE state (green), action targets (red), and reconstructed relative actions (blue) — for spatial verification of recorded trajectories.
+
+## Replay actions in MuJoCo
+
+Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify they reproduce the original trajectory.
+
+```bash
+# Replay absolute 8DOF actions
+uv run python scripts/replay_actions.py \
+    --repo-id user/pick-place --root ./datasets/user/pick-place \
+    --episode-index 0 --action-key action.ee.8dof
+
+# Replay relative actions (reconstructed via T_initial)
+uv run python scripts/replay_actions.py \
+    --repo-id user/pick-place --root ./datasets/user/pick-place \
+    --episode-index 0 --action-key action.ee.8dof_rel
+
+# Slow motion (2x slower)
+uv run python scripts/replay_actions.py \
+    --repo-id user/pick-place --root ./datasets/user/pick-place \
+    --episode-index 0 --slow 2
+```
+
 The built-in `lerobot-dataset-viz` CLI is also available but only shows images and basic action/state scalars:
 
 ```bash
