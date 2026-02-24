@@ -45,15 +45,17 @@ env = PickPlaceGymEnv(tasks="match")
 
 ## Generate a LeRobot dataset
 
+Uses [Hydra](https://hydra.cc/) for configuration (see `configs/generate.yaml` for defaults).
+
 ```bash
 # All 9 object-bin combinations, 10 episodes
-uv run python scripts/generate_dataset.py --repo-id user/pick-place --num-episodes 10 --tasks all --root ./datasets
+uv run python scripts/generate_dataset.py repo_id=user/pick-place num_episodes=10
 
 # Only colour-matched tasks, 100 episodes
-uv run python scripts/generate_dataset.py --repo-id user/pick-place-match --num-episodes 100 --tasks match --root ./datasets
+uv run python scripts/generate_dataset.py repo_id=user/pick-place-match num_episodes=100 tasks=match
 
-# Only cross-colour tasks
-uv run python scripts/generate_dataset.py --repo-id user/pick-place-cross --num-episodes 60 --tasks cross --root ./datasets
+# Only cross-colour tasks, custom root
+uv run python scripts/generate_dataset.py repo_id=user/pick-place-cross num_episodes=60 tasks=cross root=./my-datasets
 ```
 
 ## Visualise a dataset
