@@ -5,22 +5,7 @@ Franka Panda pick-and-place simulation in MuJoCo with a Gymnasium env and LeRobo
 ## Setup
 
 ```bash
-# Install dependencies
 uv sync
-
-# Clone the Panda robot model
-bash setup_menagerie.sh
-```
-
-## Run the interactive demo
-
-Opens a MuJoCo viewer and runs the FSM to pick and place all 3 coloured cubes into their bins.
-
-```bash
-uv run python main.py
-
-# Randomize object positions
-uv run python main.py --randomize --seed 42
 ```
 
 ## Gymnasium environment
@@ -43,7 +28,7 @@ env = PickPlaceGymEnv(action_mode="ee_pos_quat_g")
 # Absolute SE(3) actions in world frame (6D rotation)
 env = PickPlaceGymEnv(action_mode="ee_pos_rot6d_g")
 
-# Absolute position actions (legacy 4D)
+# Absolute position actions (4D)
 env = PickPlaceGymEnv(action_mode="abs_pos")
 
 # Fix a specific task
@@ -55,7 +40,7 @@ env = PickPlaceGymEnv(task=("obj_red", "bin_blue"))
 #   "all"    (9) — every object-bin combination (match + cross)
 env = PickPlaceGymEnv(tasks="match")
 
-# Randomize object positions on each reset (useful for training generalizable policies)
+# Randomize object positions on each reset
 env = PickPlaceGymEnv(randomize_objects=True)
 ```
 
@@ -79,18 +64,14 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-rand num_episo
 
 ## Visualise a dataset
 
-Custom visualizer that logs **all** dataset features to [Rerun](https://rerun.io/) — images, EE states (pos+quat / pos+rot6d), actions, keypoints, and target bin one-hot — with named scalar dimensions.
+Logs all dataset features to [Rerun](https://rerun.io/) — images, EE states (pos+quat / pos+rot6d), actions, keypoints, and target one-hots — with named scalar dimensions and 3D EE trails.
 
 ```bash
-# Open Rerun viewer for episode 0
 uv run python scripts/visualize_dataset.py --repo-id user/pick-place --episode-index 0
 
 # Save a .rrd file for later viewing
 uv run python scripts/visualize_dataset.py --repo-id user/pick-place --episode-index 0 --save ./viz/ep0.rrd
-rerun ./viz/ep0.rrd
 ```
-
-The visualizer also logs 3D point trails in Rerun under the `3d/` entity tree — EE state (green), action targets (red), and reconstructed relative actions (blue) — for spatial verification of recorded trajectories.
 
 ## Replay actions in MuJoCo
 
@@ -98,25 +79,31 @@ Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify th
 
 ```bash
 # Replay absolute pos+quat actions
-uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g
+uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-index 0
 
 # Replay relative actions (reconstructed via T_initial)
 uv run python scripts/replay_actions.py \
     --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g_rel
 
 # Slow motion (2x slower)
-uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --episode-index 0 --slow 2
+uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-index 0 --slow 2
+```
+
+## Run the interactive demo
+
+Opens a MuJoCo viewer and runs the FSM to pick and place all 3 coloured cubes into their bins. Requires `bash setup_menagerie.sh` to clone the Panda model.
+
+```bash
+uv run python main.py
+
+# Randomize object positions
+uv run python main.py --randomize --seed 42
 ```
 
 ## Push a dataset to Hugging Face
 
 ```bash
-# Login (one-time)
 uv run huggingface-cli login
-
-# Upload to the hf org
 uv run huggingface-cli upload user/pick-place ./datasets/user/pick-place --repo-type dataset --private
 ```
 
