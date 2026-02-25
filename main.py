@@ -1,5 +1,6 @@
 """Entry point for the Franka Panda pick-and-place simulation."""
 
+import argparse
 import os
 import sys
 import time
@@ -18,6 +19,12 @@ MENAGERIE_DIR = os.path.join(
 
 def main() -> None:
     """Run the interactive pick-and-place simulation with a passive viewer."""
+    parser = argparse.ArgumentParser(description="Run pick-and-place simulation")
+    parser.add_argument(
+        "--slow", type=float, default=1.0, help="Slowdown factor (e.g. 2 = half speed)"
+    )
+    args = parser.parse_args()
+
     if not os.path.isdir(MENAGERIE_DIR):
         print(f"Error: mujoco_menagerie not found at {MENAGERIE_DIR}")
         print("Run: bash setup_menagerie.sh")
@@ -38,8 +45,11 @@ def main() -> None:
     print("Starting pick-and-place task...")
     last_status = ""
     step_count = 0
+    step_time = env.model.opt.timestep * args.slow
 
     while env.is_running():
+        t_start = time.monotonic()
+
         status = task.update()
         if (
             status != last_status
@@ -54,6 +64,11 @@ def main() -> None:
         env.step()
         env.sync()
         step_count += 1
+
+        elapsed = time.monotonic() - t_start
+        sleep = step_time - elapsed
+        if sleep > 0:
+            time.sleep(sleep)
 
         if task.is_done:
             print(f"\nTask complete after {step_count} steps!")
