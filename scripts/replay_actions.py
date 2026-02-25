@@ -1,6 +1,7 @@
 """Replay recorded dataset actions in MuJoCo to verify correctness."""
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -72,6 +73,23 @@ def main() -> None:
 
     env.launch_viewer()
     env.reset_to_keyframe("scene_start")
+
+    # Restore object randomization from generation metadata if available
+    dataset_root = args.root or os.path.join("datasets", args.repo_id)
+    metadata_path = os.path.join(dataset_root, "metadata.json")
+    if os.path.exists(metadata_path):
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        episode_seeds = metadata.get("episode_seeds")
+        if episode_seeds and args.episode_index < len(episode_seeds):
+            rng = np.random.default_rng(episode_seeds[args.episode_index])
+            rand_kwargs = {}
+            if "spawn_x_range" in metadata:
+                rand_kwargs["x_range"] = tuple(metadata["spawn_x_range"])
+            if "spawn_y_range" in metadata:
+                rand_kwargs["y_range"] = tuple(metadata["spawn_y_range"])
+            env.randomize_objects(rng, **rand_kwargs)
+            print(f"Restored object randomization for episode {args.episode_index}")
 
     T_initial: np.ndarray | None = None
     if is_relative:
