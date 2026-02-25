@@ -9,14 +9,14 @@ spawn_y_range: [0.30, 0.45]
 features:  # null for all, or a subset of these keys
   - observation.images.overhead
   - observation.images.wrist
-  - observation.state.ee.8dof
-  - observation.state.ee.10dof
-  - observation.state.ee.8dof_rel
-  - observation.state.ee.10dof_rel
-  - action.ee.8dof
-  - action.ee.10dof
-  - action.ee.8dof_rel
-  - action.ee.10dof_rel
+  - observation.state.ee.pos_quat_g
+  - observation.state.ee.pos_rot6d_g
+  - observation.state.ee.pos_quat_g_rel
+  - observation.state.ee.pos_rot6d_g_rel
+  - action.ee.pos_quat_g
+  - action.ee.pos_rot6d_g
+  - action.ee.pos_quat_g_rel
+  - action.ee.pos_rot6d_g_rel
   - observation.target_bin_onehot
   - observation.target_obj_onehot
   - observation.keypoints_overhead

@@ -23,42 +23,42 @@ FEATURES = {
         "shape": (11,),
         "names": None,
     },
-    "observation.state.ee.8dof": {
+    "observation.state.ee.pos_quat_g": {
         "dtype": "float32",
         "shape": (8,),
         "names": None,
     },
-    "observation.state.ee.10dof": {
+    "observation.state.ee.pos_rot6d_g": {
         "dtype": "float32",
         "shape": (10,),
         "names": None,
     },
-    "observation.state.ee.8dof_rel": {
+    "observation.state.ee.pos_quat_g_rel": {
         "dtype": "float32",
         "shape": (8,),
         "names": None,
     },
-    "observation.state.ee.10dof_rel": {
+    "observation.state.ee.pos_rot6d_g_rel": {
         "dtype": "float32",
         "shape": (10,),
         "names": None,
     },
-    "action.ee.8dof": {
+    "action.ee.pos_quat_g": {
         "dtype": "float32",
         "shape": (8,),
         "names": None,
     },
-    "action.ee.10dof": {
+    "action.ee.pos_rot6d_g": {
         "dtype": "float32",
         "shape": (10,),
         "names": None,
     },
-    "action.ee.8dof_rel": {
+    "action.ee.pos_quat_g_rel": {
         "dtype": "float32",
         "shape": (8,),
         "names": None,
     },
-    "action.ee.10dof_rel": {
+    "action.ee.pos_rot6d_g_rel": {
         "dtype": "float32",
         "shape": (10,),
         "names": None,
@@ -114,20 +114,7 @@ DIM_NAMES: dict[str, list[str]] = {
         "q5",
         "q6",
     ],
-    "observation.state.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "observation.state.ee.10dof": [
-        "x",
-        "y",
-        "z",
-        "r11",
-        "r12",
-        "r13",
-        "r21",
-        "r22",
-        "r23",
-        "gripper",
-    ],
-    "observation.state.ee.8dof_rel": [
+    "observation.state.ee.pos_quat_g": [
         "x",
         "y",
         "z",
@@ -137,7 +124,7 @@ DIM_NAMES: dict[str, list[str]] = {
         "qw",
         "gripper",
     ],
-    "observation.state.ee.10dof_rel": [
+    "observation.state.ee.pos_rot6d_g": [
         "x",
         "y",
         "z",
@@ -149,8 +136,17 @@ DIM_NAMES: dict[str, list[str]] = {
         "r23",
         "gripper",
     ],
-    "action.ee.8dof": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "action.ee.10dof": [
+    "observation.state.ee.pos_quat_g_rel": [
+        "x",
+        "y",
+        "z",
+        "qx",
+        "qy",
+        "qz",
+        "qw",
+        "gripper",
+    ],
+    "observation.state.ee.pos_rot6d_g_rel": [
         "x",
         "y",
         "z",
@@ -162,8 +158,21 @@ DIM_NAMES: dict[str, list[str]] = {
         "r23",
         "gripper",
     ],
-    "action.ee.8dof_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
-    "action.ee.10dof_rel": [
+    "action.ee.pos_quat_g": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
+    "action.ee.pos_rot6d_g": [
+        "x",
+        "y",
+        "z",
+        "r11",
+        "r12",
+        "r13",
+        "r21",
+        "r22",
+        "r23",
+        "gripper",
+    ],
+    "action.ee.pos_quat_g_rel": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
+    "action.ee.pos_rot6d_g_rel": [
         "x",
         "y",
         "z",

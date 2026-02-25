@@ -17,7 +17,11 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 from mujoco_manip.constants import ACTION_REPEAT  # noqa: E402
 from mujoco_manip.controller import IKController  # noqa: E402
 from mujoco_manip.env import PickPlaceEnv  # noqa: E402
-from mujoco_manip.pose_utils import pos_rotmat_to_se3, se3_from_8dof, se3_from_10dof  # noqa: E402
+from mujoco_manip.pose_utils import (  # noqa: E402
+    pos_rotmat_to_se3,
+    se3_from_pos_quat_g,
+    se3_from_pos_rot6d_g,
+)
 from mujoco_manip.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
@@ -38,8 +42,8 @@ def main() -> None:
     parser.add_argument(
         "--action-key",
         type=str,
-        default="action.ee.8dof",
-        help="Action key to replay (default: action.ee.8dof)",
+        default="action.ee.pos_quat_g",
+        help="Action key to replay (default: action.ee.pos_quat_g)",
     )
     parser.add_argument(
         "--slow",
@@ -65,7 +69,7 @@ def main() -> None:
         sys.exit(1)
 
     is_relative: bool = args.action_key.endswith("_rel")
-    is_10dof: bool = "10dof" in args.action_key
+    is_pos_rot6d_g: bool = "pos_rot6d_g" in args.action_key
 
     env = PickPlaceEnv(SCENE_XML, add_wrist_camera=False)
     robot = PandaRobot(env.model, env.data)
@@ -111,10 +115,10 @@ def main() -> None:
         action = frame[args.action_key].numpy()
 
         if is_relative:
-            if is_10dof:
-                T_abs = T_initial @ se3_from_10dof(action)
+            if is_pos_rot6d_g:
+                T_abs = T_initial @ se3_from_pos_rot6d_g(action)
             else:
-                T_abs = T_initial @ se3_from_8dof(action)
+                T_abs = T_initial @ se3_from_pos_quat_g(action)
             target_xyz = T_abs[:3, 3]
         else:
             target_xyz = action[:3]

@@ -28,7 +28,11 @@ from mujoco_manip.controller import IKController, TARGET_ORI  # noqa: E402
 from mujoco_manip.env import PickPlaceEnv  # noqa: E402
 from mujoco_manip.features import FEATURES  # noqa: E402
 from mujoco_manip.pick_and_place import PickAndPlaceTask  # noqa: E402
-from mujoco_manip.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof  # noqa: E402
+from mujoco_manip.pose_utils import (  # noqa: E402
+    pos_rotmat_to_se3,
+    se3_to_pos_quat_g,
+    se3_to_pos_rot6d_g,
+)
 from mujoco_manip.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
@@ -113,7 +117,7 @@ def get_actions(
         initial_se3_inv: Inverse of the initial EE SE(3) (4, 4).
 
     Returns:
-        Tuple of (action_8dof, action_10dof, action_8dof_rel, action_10dof_rel).
+        Tuple of (action_pos_quat_g, action_pos_rot6d_g, action_pos_quat_g_rel, action_pos_rot6d_g_rel).
     """
     target_pos = task._target_pos if task._target_pos is not None else task.robot.ee_pos
     gripper = 1.0 if task.robot.gripper_ctrl == PandaRobot.GRIPPER_OPEN else 0.0
@@ -125,10 +129,10 @@ def get_actions(
     T_rel = initial_se3_inv @ T_target
 
     return (
-        se3_to_8dof(T_target, gripper),
-        se3_to_10dof(T_target, gripper),
-        se3_to_8dof(T_rel, gripper),
-        se3_to_10dof(T_rel, gripper),
+        se3_to_pos_quat_g(T_target, gripper),
+        se3_to_pos_rot6d_g(T_target, gripper),
+        se3_to_pos_quat_g(T_rel, gripper),
+        se3_to_pos_rot6d_g(T_rel, gripper),
     )
 
 
@@ -178,19 +182,19 @@ def run_episode(
         feature_keys
         & {
             "observation.state",
-            "observation.state.ee.8dof",
-            "observation.state.ee.10dof",
-            "observation.state.ee.8dof_rel",
-            "observation.state.ee.10dof_rel",
+            "observation.state.ee.pos_quat_g",
+            "observation.state.ee.pos_rot6d_g",
+            "observation.state.ee.pos_quat_g_rel",
+            "observation.state.ee.pos_rot6d_g_rel",
         }
     )
     need_actions = bool(
         feature_keys
         & {
-            "action.ee.8dof",
-            "action.ee.10dof",
-            "action.ee.8dof_rel",
-            "action.ee.10dof_rel",
+            "action.ee.pos_quat_g",
+            "action.ee.pos_rot6d_g",
+            "action.ee.pos_quat_g_rel",
+            "action.ee.pos_rot6d_g_rel",
         }
     )
     need_bin_onehot = "observation.target_bin_onehot" in feature_keys
@@ -201,7 +205,10 @@ def run_episode(
     need_initial_se3 = need_actions or (
         need_state
         and feature_keys
-        & {"observation.state.ee.8dof_rel", "observation.state.ee.10dof_rel"}
+        & {
+            "observation.state.ee.pos_quat_g_rel",
+            "observation.state.ee.pos_rot6d_g_rel",
+        }
     )
     initial_se3_inv = None
     if need_initial_se3:
@@ -272,51 +279,54 @@ def run_episode(
 
                 # SE3-derived states share some computation
                 need_ee = feature_keys & {
-                    "observation.state.ee.8dof",
-                    "observation.state.ee.10dof",
-                    "observation.state.ee.8dof_rel",
-                    "observation.state.ee.10dof_rel",
+                    "observation.state.ee.pos_quat_g",
+                    "observation.state.ee.pos_rot6d_g",
+                    "observation.state.ee.pos_quat_g_rel",
+                    "observation.state.ee.pos_rot6d_g_rel",
                 }
                 if need_ee:
                     T_current = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
                     gripper_val = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
 
-                    if "observation.state.ee.8dof" in feature_keys:
-                        frame["observation.state.ee.8dof"] = se3_to_8dof(
+                    if "observation.state.ee.pos_quat_g" in feature_keys:
+                        frame["observation.state.ee.pos_quat_g"] = se3_to_pos_quat_g(
                             T_current, gripper_val
                         )
-                    if "observation.state.ee.10dof" in feature_keys:
-                        frame["observation.state.ee.10dof"] = se3_to_10dof(
+                    if "observation.state.ee.pos_rot6d_g" in feature_keys:
+                        frame["observation.state.ee.pos_rot6d_g"] = se3_to_pos_rot6d_g(
                             T_current, gripper_val
                         )
 
                     if feature_keys & {
-                        "observation.state.ee.8dof_rel",
-                        "observation.state.ee.10dof_rel",
+                        "observation.state.ee.pos_quat_g_rel",
+                        "observation.state.ee.pos_rot6d_g_rel",
                     }:
                         T_rel_obs = initial_se3_inv @ T_current
-                        if "observation.state.ee.8dof_rel" in feature_keys:
-                            frame["observation.state.ee.8dof_rel"] = se3_to_8dof(
-                                T_rel_obs, gripper_val
+                        if "observation.state.ee.pos_quat_g_rel" in feature_keys:
+                            frame["observation.state.ee.pos_quat_g_rel"] = (
+                                se3_to_pos_quat_g(T_rel_obs, gripper_val)
                             )
-                        if "observation.state.ee.10dof_rel" in feature_keys:
-                            frame["observation.state.ee.10dof_rel"] = se3_to_10dof(
-                                T_rel_obs, gripper_val
+                        if "observation.state.ee.pos_rot6d_g_rel" in feature_keys:
+                            frame["observation.state.ee.pos_rot6d_g_rel"] = (
+                                se3_to_pos_rot6d_g(T_rel_obs, gripper_val)
                             )
 
             # Actions
             if need_actions:
-                action_8dof, action_10dof, action_8dof_rel, action_10dof_rel = (
-                    get_actions(task, initial_se3_inv)
-                )
-                if "action.ee.8dof" in feature_keys:
-                    frame["action.ee.8dof"] = action_8dof
-                if "action.ee.10dof" in feature_keys:
-                    frame["action.ee.10dof"] = action_10dof
-                if "action.ee.8dof_rel" in feature_keys:
-                    frame["action.ee.8dof_rel"] = action_8dof_rel
-                if "action.ee.10dof_rel" in feature_keys:
-                    frame["action.ee.10dof_rel"] = action_10dof_rel
+                (
+                    action_pos_quat_g,
+                    action_pos_rot6d_g,
+                    action_pos_quat_g_rel,
+                    action_pos_rot6d_g_rel,
+                ) = get_actions(task, initial_se3_inv)
+                if "action.ee.pos_quat_g" in feature_keys:
+                    frame["action.ee.pos_quat_g"] = action_pos_quat_g
+                if "action.ee.pos_rot6d_g" in feature_keys:
+                    frame["action.ee.pos_rot6d_g"] = action_pos_rot6d_g
+                if "action.ee.pos_quat_g_rel" in feature_keys:
+                    frame["action.ee.pos_quat_g_rel"] = action_pos_quat_g_rel
+                if "action.ee.pos_rot6d_g_rel" in feature_keys:
+                    frame["action.ee.pos_rot6d_g_rel"] = action_pos_rot6d_g_rel
 
             # Phase description
             if need_phase_desc:

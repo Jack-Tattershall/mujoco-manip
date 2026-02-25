@@ -19,15 +19,21 @@ from .controller import IKController
 from .env import PickPlaceEnv
 from .pose_utils import (
     pos_rotmat_to_se3,
-    se3_from_8dof,
-    se3_from_10dof,
-    se3_to_8dof,
-    se3_to_10dof,
+    se3_from_pos_quat_g,
+    se3_from_pos_rot6d_g,
+    se3_to_pos_quat_g,
+    se3_to_pos_rot6d_g,
 )
 from .data import SCENE_XML as _DEFAULT_XML
 from .robot import PandaRobot
 
-ACTION_MODES = ("abs_pos", "ee_8dof", "ee_10dof")
+ACTION_MODES = (
+    "abs_pos",
+    "ee_pos_quat_g",
+    "ee_pos_rot6d_g",
+    "ee_pos_quat_g_rel",
+    "ee_pos_rot6d_g_rel",
+)
 
 
 class PickPlaceGymEnv(gym.Env):
@@ -37,11 +43,15 @@ class PickPlaceGymEnv(gym.Env):
     and a one-hot encoding of the target bin.
 
     Action modes:
-        ``"abs_pos"``  — 4D: [ee_x, ee_y, ee_z, gripper] in world frame.
-        ``"ee_8dof"``  — 8D: [x, y, z, qx, qy, qz, qw, gripper] relative
+        ``"abs_pos"``      — 4D: [ee_x, ee_y, ee_z, gripper] in world frame.
+        ``"ee_pos_quat_g"``      — 8D: [x, y, z, qx, qy, qz, qw, gripper] in world
+            frame (absolute SE(3)).
+        ``"ee_pos_rot6d_g"``     — 10D: [x, y, z, r11, r12, r13, r21, r22, r23,
+            gripper] in world frame (absolute SE(3)).
+        ``"ee_pos_quat_g_rel"``  — 8D: [x, y, z, qx, qy, qz, qw, gripper] relative
             to initial EE pose.
-        ``"ee_10dof"`` — 10D: [x, y, z, r11, r12, r13, r21, r22, r23, gripper]
-            relative to initial EE pose.
+        ``"ee_pos_rot6d_g_rel"`` — 10D: [x, y, z, r11, r12, r13, r21, r22, r23,
+            gripper] relative to initial EE pose.
 
     State observations include both absolute (world-frame) and relative
     (initial-EE-frame) EE poses under ``state.ee.*`` and ``state.ee.*_rel``.
@@ -54,7 +64,7 @@ class PickPlaceGymEnv(gym.Env):
         xml_path: str = _DEFAULT_XML,
         task: tuple[str, str] | None = None,
         tasks: str | list[tuple[str, str]] = "all",
-        action_mode: str = "ee_8dof",
+        action_mode: str = "ee_pos_quat_g_rel",
         reward_type: str = "dense",
         image_size: int = IMAGE_SIZE,
         render_mode: str = "rgb_array",
@@ -71,7 +81,8 @@ class PickPlaceGymEnv(gym.Env):
             tasks: Task set to sample from on reset. Either a key
                 (``"all"``, ``"match"``, ``"cross"``) or an explicit list of
                 ``(obj, bin)`` tuples. Ignored when *task* is set.
-            action_mode: One of ``"abs_pos"``, ``"ee_8dof"``, ``"ee_10dof"``.
+            action_mode: One of ``"abs_pos"``, ``"ee_pos_quat_g"``, ``"ee_pos_rot6d_g"``,
+                ``"ee_pos_quat_g_rel"``, ``"ee_pos_rot6d_g_rel"``.
             reward_type: ``"dense"`` or ``"sparse"``.
             image_size: Resolution for camera rendering.
             render_mode: Gymnasium render mode.
@@ -119,13 +130,13 @@ class PickPlaceGymEnv(gym.Env):
                 low=np.array([-0.5, 0.0, 0.24, 0.0], dtype=np.float32),
                 high=np.array([0.5, 0.8, 0.60, 1.0], dtype=np.float32),
             )
-        elif action_mode == "ee_8dof":
+        elif action_mode in ("ee_pos_quat_g", "ee_pos_quat_g_rel"):
             low = np.full(8, -np.inf, dtype=np.float32)
             high = np.full(8, np.inf, dtype=np.float32)
             low[7] = 0.0
             high[7] = 1.0  # gripper
             self.action_space = spaces.Box(low=low, high=high)
-        elif action_mode == "ee_10dof":
+        elif action_mode in ("ee_pos_rot6d_g", "ee_pos_rot6d_g_rel"):
             low = np.full(10, -np.inf, dtype=np.float32)
             high = np.full(10, np.inf, dtype=np.float32)
             low[9] = 0.0
@@ -141,12 +152,16 @@ class PickPlaceGymEnv(gym.Env):
                     0, 255, (image_size, image_size, 3), dtype=np.uint8
                 ),
                 "state": spaces.Box(-np.inf, np.inf, (11,), dtype=np.float32),
-                "state.ee.8dof": spaces.Box(-np.inf, np.inf, (8,), dtype=np.float32),
-                "state.ee.10dof": spaces.Box(-np.inf, np.inf, (10,), dtype=np.float32),
-                "state.ee.8dof_rel": spaces.Box(
+                "state.ee.pos_quat_g": spaces.Box(
                     -np.inf, np.inf, (8,), dtype=np.float32
                 ),
-                "state.ee.10dof_rel": spaces.Box(
+                "state.ee.pos_rot6d_g": spaces.Box(
+                    -np.inf, np.inf, (10,), dtype=np.float32
+                ),
+                "state.ee.pos_quat_g_rel": spaces.Box(
+                    -np.inf, np.inf, (8,), dtype=np.float32
+                ),
+                "state.ee.pos_rot6d_g_rel": spaces.Box(
                     -np.inf, np.inf, (10,), dtype=np.float32
                 ),
                 "target_bin_onehot": spaces.Box(0.0, 1.0, (3,), dtype=np.float32),
@@ -176,7 +191,7 @@ class PickPlaceGymEnv(gym.Env):
     def _relative_action_to_world_pos(
         self, action: np.ndarray
     ) -> tuple[np.ndarray, float]:
-        """Convert a relative-to-initial action to world-frame target.
+        """Convert an action to a world-frame target position.
 
         Args:
             action: Raw action array from the agent.
@@ -187,11 +202,19 @@ class PickPlaceGymEnv(gym.Env):
         if self._action_mode == "abs_pos":
             return action[:3], action[3]
 
-        if self._action_mode == "ee_8dof":
-            T_rel = se3_from_8dof(action)
+        if self._action_mode == "ee_pos_quat_g":
+            T_abs = se3_from_pos_quat_g(action)
+            return T_abs[:3, 3], action[7]
+
+        if self._action_mode == "ee_pos_rot6d_g":
+            T_abs = se3_from_pos_rot6d_g(action)
+            return T_abs[:3, 3], action[9]
+
+        if self._action_mode == "ee_pos_quat_g_rel":
+            T_rel = se3_from_pos_quat_g(action)
             gripper_cmd = action[7]
-        else:  # ee_10dof
-            T_rel = se3_from_10dof(action)
+        else:  # ee_pos_rot6d_g_rel
+            T_rel = se3_from_pos_rot6d_g(action)
             gripper_cmd = action[9]
 
         # T_abs = T_init @ T_rel
@@ -232,10 +255,10 @@ class PickPlaceGymEnv(gym.Env):
         T_current = pos_rotmat_to_se3(self._robot.ee_pos, self._robot.ee_xmat)
         T_rel = np.linalg.inv(self._initial_ee_se3) @ T_current
         gripper_val = float(gripper_norm[0])
-        state_8dof = se3_to_8dof(T_current, gripper_val)
-        state_10dof = se3_to_10dof(T_current, gripper_val)
-        state_8dof_rel = se3_to_8dof(T_rel, gripper_val)
-        state_10dof_rel = se3_to_10dof(T_rel, gripper_val)
+        state_pos_quat_g = se3_to_pos_quat_g(T_current, gripper_val)
+        state_pos_rot6d_g = se3_to_pos_rot6d_g(T_current, gripper_val)
+        state_pos_quat_g_rel = se3_to_pos_quat_g(T_rel, gripper_val)
+        state_pos_rot6d_g_rel = se3_to_pos_rot6d_g(T_rel, gripper_val)
 
         kp_overhead = compute_keypoints(model, data, "overhead", self._image_size)
         kp_wrist = compute_keypoints(model, data, "wrist", self._image_size)
@@ -244,10 +267,10 @@ class PickPlaceGymEnv(gym.Env):
             "image_overhead": img_overhead,
             "image_wrist": img_wrist,
             "state": state,
-            "state.ee.8dof": state_8dof,
-            "state.ee.10dof": state_10dof,
-            "state.ee.8dof_rel": state_8dof_rel,
-            "state.ee.10dof_rel": state_10dof_rel,
+            "state.ee.pos_quat_g": state_pos_quat_g,
+            "state.ee.pos_rot6d_g": state_pos_rot6d_g,
+            "state.ee.pos_quat_g_rel": state_pos_quat_g_rel,
+            "state.ee.pos_rot6d_g_rel": state_pos_rot6d_g_rel,
             "target_bin_onehot": bin_onehot,
             "target_obj_onehot": obj_onehot,
             "keypoints_overhead": kp_overhead,

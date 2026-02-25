@@ -19,8 +19,8 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 from mujoco_manip.features import DIM_NAMES  # noqa: E402
 from mujoco_manip.pose_utils import (  # noqa: E402
     pos_rotmat_to_se3,
-    se3_from_8dof,
-    se3_from_10dof,
+    se3_from_pos_quat_g,
+    se3_from_pos_rot6d_g,
 )
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
@@ -118,18 +118,18 @@ def visualize_episode(
     T_initial: np.ndarray | None = None
 
     first_frame = dataset[0]
-    has_state_8dof = "observation.state.ee.8dof" in first_frame
-    has_state_rel_8dof = "observation.state.ee.8dof_rel" in first_frame
-    has_state_rel_10dof = "observation.state.ee.10dof_rel" in first_frame
-    has_action_8dof = "action.ee.8dof" in first_frame
-    has_action_rel_8dof = "action.ee.8dof_rel" in first_frame
-    has_action_rel_10dof = "action.ee.10dof_rel" in first_frame
+    has_state_pos_quat_g = "observation.state.ee.pos_quat_g" in first_frame
+    has_state_rel_pos_quat_g = "observation.state.ee.pos_quat_g_rel" in first_frame
+    has_state_rel_pos_rot6d_g = "observation.state.ee.pos_rot6d_g_rel" in first_frame
+    has_action_pos_quat_g = "action.ee.pos_quat_g" in first_frame
+    has_action_rel_pos_quat_g = "action.ee.pos_quat_g_rel" in first_frame
+    has_action_rel_pos_rot6d_g = "action.ee.pos_rot6d_g_rel" in first_frame
 
     has_any_rel: bool = (
-        has_state_rel_8dof
-        or has_state_rel_10dof
-        or has_action_rel_8dof
-        or has_action_rel_10dof
+        has_state_rel_pos_quat_g
+        or has_state_rel_pos_rot6d_g
+        or has_action_rel_pos_quat_g
+        or has_action_rel_pos_rot6d_g
     )
     if has_any_rel:
         from mujoco_manip.env import PickPlaceEnv  # noqa: E402
@@ -194,8 +194,8 @@ def visualize_episode(
                 )
                 rr.log(f"{key}/{name}", rr.Scalars(float(v)))
 
-        if has_state_8dof:
-            ee_xyz = frame["observation.state.ee.8dof"].numpy()[:3].tolist()
+        if has_state_pos_quat_g:
+            ee_xyz = frame["observation.state.ee.pos_quat_g"].numpy()[:3].tolist()
             state_abs_trail.append(ee_xyz)
             rr.log("state_3d/abs", rr.Points3D([ee_xyz], colors=[[0, 200, 0]]))
             rr.log(
@@ -203,13 +203,15 @@ def visualize_episode(
                 rr.LineStrips3D([state_abs_trail], colors=[[0, 200, 0]]),
             )
 
-        if T_initial is not None and (has_state_rel_8dof or has_state_rel_10dof):
-            if has_state_rel_8dof:
-                rel = frame["observation.state.ee.8dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_8dof(rel)
+        if T_initial is not None and (
+            has_state_rel_pos_quat_g or has_state_rel_pos_rot6d_g
+        ):
+            if has_state_rel_pos_quat_g:
+                rel = frame["observation.state.ee.pos_quat_g_rel"].numpy()
+                T_abs = T_initial @ se3_from_pos_quat_g(rel)
             else:
-                rel = frame["observation.state.ee.10dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_10dof(rel)
+                rel = frame["observation.state.ee.pos_rot6d_g_rel"].numpy()
+                T_abs = T_initial @ se3_from_pos_rot6d_g(rel)
             rel_xyz = T_abs[:3, 3].tolist()
             state_rel_trail.append(rel_xyz)
             rr.log("state_3d/rel", rr.Points3D([rel_xyz], colors=[[0, 100, 255]]))
@@ -218,8 +220,8 @@ def visualize_episode(
                 rr.LineStrips3D([state_rel_trail], colors=[[0, 100, 255]]),
             )
 
-        if has_action_8dof:
-            act_xyz = frame["action.ee.8dof"].numpy()[:3].tolist()
+        if has_action_pos_quat_g:
+            act_xyz = frame["action.ee.pos_quat_g"].numpy()[:3].tolist()
             action_abs_trail.append(act_xyz)
             rr.log("action_3d/abs", rr.Points3D([act_xyz], colors=[[0, 200, 0]]))
             rr.log(
@@ -227,13 +229,15 @@ def visualize_episode(
                 rr.LineStrips3D([action_abs_trail], colors=[[0, 200, 0]]),
             )
 
-        if T_initial is not None and (has_action_rel_8dof or has_action_rel_10dof):
-            if has_action_rel_8dof:
-                rel = frame["action.ee.8dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_8dof(rel)
+        if T_initial is not None and (
+            has_action_rel_pos_quat_g or has_action_rel_pos_rot6d_g
+        ):
+            if has_action_rel_pos_quat_g:
+                rel = frame["action.ee.pos_quat_g_rel"].numpy()
+                T_abs = T_initial @ se3_from_pos_quat_g(rel)
             else:
-                rel = frame["action.ee.10dof_rel"].numpy()
-                T_abs = T_initial @ se3_from_10dof(rel)
+                rel = frame["action.ee.pos_rot6d_g_rel"].numpy()
+                T_abs = T_initial @ se3_from_pos_rot6d_g(rel)
             rel_xyz = T_abs[:3, 3].tolist()
             action_rel_trail.append(rel_xyz)
             rr.log("action_3d/rel", rr.Points3D([rel_xyz], colors=[[0, 100, 255]]))

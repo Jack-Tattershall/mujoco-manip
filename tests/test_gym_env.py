@@ -1,4 +1,4 @@
-"""Tests for PickPlaceGymEnv with ee_8dof and ee_10dof action modes."""
+"""Tests for PickPlaceGymEnv action modes (absolute and relative SE(3))."""
 
 import numpy as np
 import pytest
@@ -11,8 +11,8 @@ from mujoco_manip.gym_env import PickPlaceGymEnv
 from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     rotmat_to_6d,
-    se3_to_8dof,
-    se3_to_10dof,
+    se3_to_pos_quat_g,
+    se3_to_pos_rot6d_g,
 )
 
 
@@ -21,7 +21,7 @@ from mujoco_manip.pose_utils import (
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(params=["ee_8dof", "ee_10dof"])
+@pytest.fixture(params=["ee_pos_quat_g_rel", "ee_pos_rot6d_g_rel"])
 def env(request):
     """Yield a PickPlaceGymEnv for each relative action mode, cleaned up after."""
     e = PickPlaceGymEnv(
@@ -34,18 +34,40 @@ def env(request):
 
 
 @pytest.fixture
-def env_8dof():
+def env_pos_quat_g_rel():
     e = PickPlaceGymEnv(
-        action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=50
+        action_mode="ee_pos_quat_g_rel",
+        task=("obj_red", "bin_red"),
+        max_episode_steps=50,
     )
     yield e
     e.close()
 
 
 @pytest.fixture
-def env_10dof():
+def env_pos_rot6d_g_rel():
     e = PickPlaceGymEnv(
-        action_mode="ee_10dof", task=("obj_red", "bin_red"), max_episode_steps=50
+        action_mode="ee_pos_rot6d_g_rel",
+        task=("obj_red", "bin_red"),
+        max_episode_steps=50,
+    )
+    yield e
+    e.close()
+
+
+@pytest.fixture
+def env_pos_quat_g():
+    e = PickPlaceGymEnv(
+        action_mode="ee_pos_quat_g", task=("obj_red", "bin_red"), max_episode_steps=50
+    )
+    yield e
+    e.close()
+
+
+@pytest.fixture
+def env_pos_rot6d_g():
+    e = PickPlaceGymEnv(
+        action_mode="ee_pos_rot6d_g", task=("obj_red", "bin_red"), max_episode_steps=50
     )
     yield e
     e.close()
@@ -70,40 +92,46 @@ class TestConstruction:
         with pytest.raises(ValueError, match="action_mode must be one of"):
             PickPlaceGymEnv(action_mode="invalid")
 
-    def test_action_space_shape_8dof(self, env_8dof):
-        assert env_8dof.action_space.shape == (8,)
+    def test_action_space_shape_pos_quat_g_rel(self, env_pos_quat_g_rel):
+        assert env_pos_quat_g_rel.action_space.shape == (8,)
 
-    def test_action_space_shape_10dof(self, env_10dof):
-        assert env_10dof.action_space.shape == (10,)
+    def test_action_space_shape_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
+        assert env_pos_rot6d_g_rel.action_space.shape == (10,)
+
+    def test_action_space_shape_pos_quat_g(self, env_pos_quat_g):
+        assert env_pos_quat_g.action_space.shape == (8,)
+
+    def test_action_space_shape_pos_rot6d_g(self, env_pos_rot6d_g):
+        assert env_pos_rot6d_g.action_space.shape == (10,)
 
     def test_action_space_shape_abs(self, env_abs):
         assert env_abs.action_space.shape == (4,)
 
-    def test_gripper_bounds_8dof(self, env_8dof):
-        assert env_8dof.action_space.low[7] == 0.0
-        assert env_8dof.action_space.high[7] == 1.0
+    def test_gripper_bounds_pos_quat_g_rel(self, env_pos_quat_g_rel):
+        assert env_pos_quat_g_rel.action_space.low[7] == 0.0
+        assert env_pos_quat_g_rel.action_space.high[7] == 1.0
 
-    def test_gripper_bounds_10dof(self, env_10dof):
-        assert env_10dof.action_space.low[9] == 0.0
-        assert env_10dof.action_space.high[9] == 1.0
+    def test_gripper_bounds_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
+        assert env_pos_rot6d_g_rel.action_space.low[9] == 0.0
+        assert env_pos_rot6d_g_rel.action_space.high[9] == 1.0
 
-    def test_pose_dims_unbounded_8dof(self, env_8dof):
-        assert np.all(env_8dof.action_space.low[:7] == -np.inf)
-        assert np.all(env_8dof.action_space.high[:7] == np.inf)
+    def test_pose_dims_unbounded_pos_quat_g_rel(self, env_pos_quat_g_rel):
+        assert np.all(env_pos_quat_g_rel.action_space.low[:7] == -np.inf)
+        assert np.all(env_pos_quat_g_rel.action_space.high[:7] == np.inf)
 
-    def test_pose_dims_unbounded_10dof(self, env_10dof):
-        assert np.all(env_10dof.action_space.low[:9] == -np.inf)
-        assert np.all(env_10dof.action_space.high[:9] == np.inf)
+    def test_pose_dims_unbounded_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
+        assert np.all(env_pos_rot6d_g_rel.action_space.low[:9] == -np.inf)
+        assert np.all(env_pos_rot6d_g_rel.action_space.high[:9] == np.inf)
 
     def test_observation_space_keys(self, env):
         expected = {
             "image_overhead",
             "image_wrist",
             "state",
-            "state.ee.8dof",
-            "state.ee.10dof",
-            "state.ee.8dof_rel",
-            "state.ee.10dof_rel",
+            "state.ee.pos_quat_g",
+            "state.ee.pos_rot6d_g",
+            "state.ee.pos_quat_g_rel",
+            "state.ee.pos_rot6d_g_rel",
             "target_bin_onehot",
             "target_obj_onehot",
             "keypoints_overhead",
@@ -130,8 +158,8 @@ class TestReset:
         assert obs["image_overhead"].shape == (224, 224, 3)
         assert obs["image_wrist"].shape == (224, 224, 3)
         assert obs["state"].shape == (11,)
-        assert obs["state.ee.8dof_rel"].shape == (8,)
-        assert obs["state.ee.10dof_rel"].shape == (10,)
+        assert obs["state.ee.pos_quat_g_rel"].shape == (8,)
+        assert obs["state.ee.pos_rot6d_g_rel"].shape == (10,)
         assert obs["target_bin_onehot"].shape == (3,)
         assert obs["target_obj_onehot"].shape == (3,)
         assert obs["keypoints_overhead"].shape == (len(KEYPOINT_BODIES), 2)
@@ -230,34 +258,34 @@ class TestStep:
 class TestIdentityAction:
     """Sending the identity relative pose should keep the EE near its initial position."""
 
-    def _identity_8dof(self):
+    def _identity_pos_quat_g(self):
         # Identity rotation as quaternion + gripper open
         return np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0], dtype=np.float32)
 
-    def _identity_10dof(self):
+    def _identity_pos_rot6d_g(self):
         # Identity rotation as 6D (rows of I) + gripper open
         R_id = np.eye(3)
         d6 = rotmat_to_6d(R_id)
         return np.array([0.0, 0.0, 0.0, *d6, 1.0], dtype=np.float32)
 
-    def test_identity_8dof_stays_near_initial(self, env_8dof):
-        obs, _ = env_8dof.reset()
+    def test_identity_pos_quat_g_rel_stays_near_initial(self, env_pos_quat_g_rel):
+        obs, _ = env_pos_quat_g_rel.reset()
         initial_ee = obs["state"][:3].copy()
 
         # Step with identity action several times
         for _ in range(5):
-            obs, *_ = env_8dof.step(self._identity_8dof())
+            obs, *_ = env_pos_quat_g_rel.step(self._identity_pos_quat_g())
 
         ee_after = obs["state"][:3]
         dist = np.linalg.norm(ee_after - initial_ee)
         assert dist < 0.05, f"EE drifted {dist:.4f}m from initial with identity action"
 
-    def test_identity_10dof_stays_near_initial(self, env_10dof):
-        obs, _ = env_10dof.reset()
+    def test_identity_pos_rot6d_g_rel_stays_near_initial(self, env_pos_rot6d_g_rel):
+        obs, _ = env_pos_rot6d_g_rel.reset()
         initial_ee = obs["state"][:3].copy()
 
         for _ in range(5):
-            obs, *_ = env_10dof.step(self._identity_10dof())
+            obs, *_ = env_pos_rot6d_g_rel.step(self._identity_pos_rot6d_g())
 
         ee_after = obs["state"][:3]
         dist = np.linalg.norm(ee_after - initial_ee)
@@ -272,9 +300,9 @@ class TestIdentityAction:
 class TestKnownDisplacement:
     """A relative translation should move the EE by that amount in the initial frame."""
 
-    def test_8dof_translation_moves_ee(self, env_8dof):
-        obs, _ = env_8dof.reset()
-        T_init = env_8dof._initial_ee_se3.copy()
+    def test_pos_quat_g_rel_translation_moves_ee(self, env_pos_quat_g_rel):
+        obs, _ = env_pos_quat_g_rel.reset()
+        T_init = env_pos_quat_g_rel._initial_ee_se3.copy()
 
         # Command: move 0.1m along the initial frame's x-axis, identity rotation, gripper open
         dx_initial = np.array([0.1, 0.0, 0.0])
@@ -282,7 +310,7 @@ class TestKnownDisplacement:
 
         # Step many times so IK converges
         for _ in range(20):
-            obs, *_ = env_8dof.step(action)
+            obs, *_ = env_pos_quat_g_rel.step(action)
 
         ee_after = obs["state"][:3]
         # Expected world-frame target: T_init @ [dx; 1]
@@ -292,16 +320,16 @@ class TestKnownDisplacement:
             f"EE at {ee_after}, expected near {expected_world} (error={dist:.4f}m)"
         )
 
-    def test_10dof_translation_moves_ee(self, env_10dof):
-        obs, _ = env_10dof.reset()
-        T_init = env_10dof._initial_ee_se3.copy()
+    def test_pos_rot6d_g_rel_translation_moves_ee(self, env_pos_rot6d_g_rel):
+        obs, _ = env_pos_rot6d_g_rel.reset()
+        T_init = env_pos_rot6d_g_rel._initial_ee_se3.copy()
 
         dx_initial = np.array([0.1, 0.0, 0.0])
         d6 = rotmat_to_6d(np.eye(3))
         action = np.array([*dx_initial, *d6, 1.0], dtype=np.float32)
 
         for _ in range(20):
-            obs, *_ = env_10dof.step(action)
+            obs, *_ = env_pos_rot6d_g_rel.step(action)
 
         ee_after = obs["state"][:3]
         expected_world = (T_init @ np.array([*dx_initial, 1.0]))[:3]
@@ -318,7 +346,7 @@ class TestKnownDisplacement:
 
 class TestGripperControl:
     def _make_open_action(self, mode):
-        if mode == "ee_8dof":
+        if mode == "ee_pos_quat_g_rel":
             return np.array(
                 [0, 0, 0, 0, 0, 0, 1, 1.0], dtype=np.float32
             )  # gripper=1 → open
@@ -327,7 +355,7 @@ class TestGripperControl:
             return np.array([0, 0, 0, *d6, 1.0], dtype=np.float32)
 
     def _make_close_action(self, mode):
-        if mode == "ee_8dof":
+        if mode == "ee_pos_quat_g_rel":
             return np.array(
                 [0, 0, 0, 0, 0, 0, 1, 0.0], dtype=np.float32
             )  # gripper=0 → close
@@ -357,28 +385,30 @@ class TestGripperControl:
 
 
 # ---------------------------------------------------------------------------
-# 8dof ↔ 10dof consistency: same relative SE(3) produces same world target
+# pos_quat_g ↔ pos_rot6d_g consistency: same relative SE(3) produces same world target
 # ---------------------------------------------------------------------------
 
 
 class TestCrossModeParity:
-    """The same relative SE(3) encoded as 8dof or 10dof should yield the same EE target."""
+    """The same relative SE(3) encoded as pos_quat_g or pos_rot6d_g should yield the same EE target."""
 
-    def test_same_relative_pose_same_ee_position(self, env_8dof, env_10dof):
-        obs8, _ = env_8dof.reset(seed=0)
-        obs10, _ = env_10dof.reset(seed=0)
+    def test_same_relative_pose_same_ee_position(
+        self, env_pos_quat_g_rel, env_pos_rot6d_g_rel
+    ):
+        obs8, _ = env_pos_quat_g_rel.reset(seed=0)
+        obs10, _ = env_pos_rot6d_g_rel.reset(seed=0)
 
         # Both should start at the same place
         np.testing.assert_allclose(obs8["state"][:3], obs10["state"][:3], atol=1e-5)
 
         # Build a relative SE(3) with a known offset
         T_rel = pos_rotmat_to_se3(np.array([0.05, -0.03, 0.02]), np.eye(3))
-        action_8 = se3_to_8dof(T_rel, gripper=1.0)
-        action_10 = se3_to_10dof(T_rel, gripper=1.0)
+        action_8 = se3_to_pos_quat_g(T_rel, gripper=1.0)
+        action_10 = se3_to_pos_rot6d_g(T_rel, gripper=1.0)
 
         for _ in range(15):
-            obs8, *_ = env_8dof.step(action_8)
-            obs10, *_ = env_10dof.step(action_10)
+            obs8, *_ = env_pos_quat_g_rel.step(action_8)
+            obs10, *_ = env_pos_rot6d_g_rel.step(action_10)
 
         ee8 = obs8["state"][:3]
         ee10 = obs10["state"][:3]
@@ -386,7 +416,7 @@ class TestCrossModeParity:
             ee8,
             ee10,
             atol=0.01,
-            err_msg="8dof and 10dof should drive EE to the same position",
+            err_msg="pos_quat_g and pos_rot6d_g should drive EE to the same position",
         )
 
 
@@ -425,7 +455,7 @@ class TestReward:
 
     def test_sparse_reward_env(self):
         e = PickPlaceGymEnv(
-            action_mode="ee_8dof",
+            action_mode="ee_pos_quat_g_rel",
             reward_type="sparse",
             task=("obj_red", "bin_red"),
             max_episode_steps=10,
@@ -446,7 +476,9 @@ class TestReward:
 class TestTaskSelection:
     def test_fixed_task(self):
         e = PickPlaceGymEnv(
-            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+            action_mode="ee_pos_quat_g_rel",
+            task=("obj_blue", "bin_green"),
+            max_episode_steps=10,
         )
         try:
             obs, _ = e.reset()
@@ -458,7 +490,9 @@ class TestTaskSelection:
             e.close()
 
     def test_random_task_from_pool(self):
-        e = PickPlaceGymEnv(action_mode="ee_8dof", tasks="all", max_episode_steps=10)
+        e = PickPlaceGymEnv(
+            action_mode="ee_pos_quat_g_rel", tasks="all", max_episode_steps=10
+        )
         try:
             seen_bins = set()
             for _ in range(30):
@@ -472,7 +506,9 @@ class TestTaskSelection:
 
     def test_custom_task_list(self):
         custom = [("obj_red", "bin_blue"), ("obj_green", "bin_red")]
-        e = PickPlaceGymEnv(action_mode="ee_10dof", tasks=custom, max_episode_steps=10)
+        e = PickPlaceGymEnv(
+            action_mode="ee_pos_rot6d_g_rel", tasks=custom, max_episode_steps=10
+        )
         try:
             for _ in range(10):
                 e.reset()
@@ -503,48 +539,48 @@ class TestRender:
 class TestRelativePoseMath:
     """Verify the internal _relative_action_to_world_pos method."""
 
-    def test_identity_maps_to_initial_pos_8dof(self, env_8dof):
-        env_8dof.reset()
-        initial_pos = env_8dof._robot.ee_pos.copy()
+    def test_identity_maps_to_initial_pos_pos_quat_g_rel(self, env_pos_quat_g_rel):
+        env_pos_quat_g_rel.reset()
+        initial_pos = env_pos_quat_g_rel._robot.ee_pos.copy()
         identity = np.array([0, 0, 0, 0, 0, 0, 1, 1.0], dtype=np.float32)
-        world_pos, gripper = env_8dof._relative_action_to_world_pos(identity)
+        world_pos, gripper = env_pos_quat_g_rel._relative_action_to_world_pos(identity)
         np.testing.assert_allclose(world_pos, initial_pos, atol=1e-6)
         assert gripper == 1.0
 
-    def test_identity_maps_to_initial_pos_10dof(self, env_10dof):
-        env_10dof.reset()
-        initial_pos = env_10dof._robot.ee_pos.copy()
+    def test_identity_maps_to_initial_pos_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
+        env_pos_rot6d_g_rel.reset()
+        initial_pos = env_pos_rot6d_g_rel._robot.ee_pos.copy()
         d6 = rotmat_to_6d(np.eye(3))
         identity = np.array([0, 0, 0, *d6, 0.5], dtype=np.float32)
-        world_pos, gripper = env_10dof._relative_action_to_world_pos(identity)
+        world_pos, gripper = env_pos_rot6d_g_rel._relative_action_to_world_pos(identity)
         np.testing.assert_allclose(world_pos, initial_pos, atol=1e-6)
         assert gripper == pytest.approx(0.5)
 
-    def test_translation_roundtrip_8dof(self, env_8dof):
+    def test_translation_roundtrip_pos_quat_g_rel(self, env_pos_quat_g_rel):
         """Build a relative action from a known world target, verify env recovers it."""
-        env_8dof.reset()
-        T_init = env_8dof._initial_ee_se3.copy()
+        env_pos_quat_g_rel.reset()
+        T_init = env_pos_quat_g_rel._initial_ee_se3.copy()
         T_init_inv = np.linalg.inv(T_init)
 
         target_world = np.array([-0.1, 0.5, 0.40])
         T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
         T_rel = T_init_inv @ T_target
-        action = se3_to_8dof(T_rel, gripper=1.0)
+        action = se3_to_pos_quat_g(T_rel, gripper=1.0)
 
-        world_pos, _ = env_8dof._relative_action_to_world_pos(action)
+        world_pos, _ = env_pos_quat_g_rel._relative_action_to_world_pos(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
 
-    def test_translation_roundtrip_10dof(self, env_10dof):
-        env_10dof.reset()
-        T_init = env_10dof._initial_ee_se3.copy()
+    def test_translation_roundtrip_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
+        env_pos_rot6d_g_rel.reset()
+        T_init = env_pos_rot6d_g_rel._initial_ee_se3.copy()
         T_init_inv = np.linalg.inv(T_init)
 
         target_world = np.array([0.15, 0.55, 0.35])
         T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
         T_rel = T_init_inv @ T_target
-        action = se3_to_10dof(T_rel, gripper=0.0)
+        action = se3_to_pos_rot6d_g(T_rel, gripper=0.0)
 
-        world_pos, gripper = env_10dof._relative_action_to_world_pos(action)
+        world_pos, gripper = env_pos_rot6d_g_rel._relative_action_to_world_pos(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
         assert gripper == pytest.approx(0.0)
 
@@ -554,6 +590,101 @@ class TestRelativePoseMath:
         world_pos, gripper = env_abs._relative_action_to_world_pos(action)
         np.testing.assert_array_equal(world_pos, action[:3])
         assert gripper == pytest.approx(0.8)
+
+    def test_absolute_pos_quat_g_passthrough(self, env_pos_quat_g):
+        """Absolute pos_quat_g action decodes SE(3) directly without T_initial."""
+        env_pos_quat_g.reset()
+        target_world = np.array([-0.1, 0.5, 0.40])
+        T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
+        action = se3_to_pos_quat_g(T_target, gripper=1.0)
+
+        world_pos, gripper = env_pos_quat_g._relative_action_to_world_pos(action)
+        np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
+        assert gripper == pytest.approx(1.0)
+
+    def test_absolute_pos_rot6d_g_passthrough(self, env_pos_rot6d_g):
+        """Absolute pos_rot6d_g action decodes SE(3) directly without T_initial."""
+        env_pos_rot6d_g.reset()
+        target_world = np.array([0.15, 0.55, 0.35])
+        T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
+        action = se3_to_pos_rot6d_g(T_target, gripper=0.0)
+
+        world_pos, gripper = env_pos_rot6d_g._relative_action_to_world_pos(action)
+        np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
+        assert gripper == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Absolute SE(3) action modes (world-frame)
+# ---------------------------------------------------------------------------
+
+
+class TestAbsoluteSE3Action:
+    """Absolute SE(3) modes should drive EE to the encoded world-frame pose."""
+
+    def test_initial_pose_keeps_ee_in_place_pos_quat_g(self, env_pos_quat_g):
+        """Sending the world-frame initial EE pose as an absolute action keeps EE still."""
+        obs, _ = env_pos_quat_g.reset()
+        initial_ee = obs["state"][:3].copy()
+        T_init = env_pos_quat_g._initial_ee_se3.copy()
+        action = se3_to_pos_quat_g(T_init, gripper=1.0)
+
+        for _ in range(5):
+            obs, *_ = env_pos_quat_g.step(action)
+
+        ee_after = obs["state"][:3]
+        dist = np.linalg.norm(ee_after - initial_ee)
+        assert dist < 0.05, (
+            f"EE drifted {dist:.4f}m from initial with absolute initial-pose action"
+        )
+
+    def test_initial_pose_keeps_ee_in_place_pos_rot6d_g(self, env_pos_rot6d_g):
+        """Sending the world-frame initial EE pose as an absolute action keeps EE still."""
+        obs, _ = env_pos_rot6d_g.reset()
+        initial_ee = obs["state"][:3].copy()
+        T_init = env_pos_rot6d_g._initial_ee_se3.copy()
+        action = se3_to_pos_rot6d_g(T_init, gripper=1.0)
+
+        for _ in range(5):
+            obs, *_ = env_pos_rot6d_g.step(action)
+
+        ee_after = obs["state"][:3]
+        dist = np.linalg.norm(ee_after - initial_ee)
+        assert dist < 0.05, (
+            f"EE drifted {dist:.4f}m from initial with absolute initial-pose action"
+        )
+
+    def test_known_world_target_pos_quat_g(self, env_pos_quat_g):
+        """A known absolute world target drives EE to the right position."""
+        env_pos_quat_g.reset()
+        target_world = np.array([0.0, 0.4, 0.45])
+        T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
+        action = se3_to_pos_quat_g(T_target, gripper=1.0)
+
+        for _ in range(20):
+            obs, *_ = env_pos_quat_g.step(action)
+
+        ee_after = obs["state"][:3]
+        dist = np.linalg.norm(ee_after - target_world)
+        assert dist < 0.05, (
+            f"EE at {ee_after}, expected near {target_world} (error={dist:.4f}m)"
+        )
+
+    def test_known_world_target_pos_rot6d_g(self, env_pos_rot6d_g):
+        """A known absolute world target drives EE to the right position."""
+        env_pos_rot6d_g.reset()
+        target_world = np.array([0.0, 0.4, 0.45])
+        T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
+        action = se3_to_pos_rot6d_g(T_target, gripper=1.0)
+
+        for _ in range(20):
+            obs, *_ = env_pos_rot6d_g.step(action)
+
+        ee_after = obs["state"][:3]
+        dist = np.linalg.norm(ee_after - target_world)
+        assert dist < 0.05, (
+            f"EE at {ee_after}, expected near {target_world} (error={dist:.4f}m)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -583,10 +714,14 @@ class TestTargetObjKeypointsOverhead:
 
     def test_different_tasks_give_different_keypoints(self):
         e1 = PickPlaceGymEnv(
-            action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=10
+            action_mode="ee_pos_quat_g_rel",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=10,
         )
         e2 = PickPlaceGymEnv(
-            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+            action_mode="ee_pos_quat_g_rel",
+            task=("obj_blue", "bin_green"),
+            max_episode_steps=10,
         )
         try:
             obs1, _ = e1.reset()
@@ -623,10 +758,14 @@ class TestTargetBinKeypointsOverhead:
 
     def test_different_tasks_give_different_keypoints(self):
         e1 = PickPlaceGymEnv(
-            action_mode="ee_8dof", task=("obj_red", "bin_red"), max_episode_steps=10
+            action_mode="ee_pos_quat_g_rel",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=10,
         )
         e2 = PickPlaceGymEnv(
-            action_mode="ee_8dof", task=("obj_blue", "bin_green"), max_episode_steps=10
+            action_mode="ee_pos_quat_g_rel",
+            task=("obj_blue", "bin_green"),
+            max_episode_steps=10,
         )
         try:
             obs1, _ = e1.reset()

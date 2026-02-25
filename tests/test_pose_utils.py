@@ -9,10 +9,10 @@ from mujoco_manip.pose_utils import (
     rotmat_from_6d,
     rotmat_to_6d,
     rotmat_to_quat_xyzw,
-    se3_from_8dof,
-    se3_from_10dof,
-    se3_to_8dof,
-    se3_to_10dof,
+    se3_from_pos_quat_g,
+    se3_from_pos_rot6d_g,
+    se3_to_pos_quat_g,
+    se3_to_pos_rot6d_g,
     se3_to_pos_rotmat,
 )
 
@@ -129,28 +129,28 @@ class TestRotation6D:
 class Test8DOF:
     def test_identity(self):
         dof8 = np.array([0, 0, 0, 0, 0, 0, 1, 0.5], dtype=np.float32)
-        T = se3_from_8dof(dof8)
+        T = se3_from_pos_quat_g(dof8)
         np.testing.assert_allclose(T, np.eye(4), atol=1e-6)
 
     @pytest.mark.parametrize("gripper", [0.0, 0.5, 1.0])
     def test_roundtrip(self, gripper: float):
         np.random.seed(42)
         T = _random_se3()
-        dof8 = se3_to_8dof(T, gripper)
-        T_recovered = se3_from_8dof(dof8)
+        dof8 = se3_to_pos_quat_g(T, gripper)
+        T_recovered = se3_from_pos_quat_g(dof8)
         np.testing.assert_allclose(T_recovered, T, atol=1e-5)
         assert dof8[-1] == pytest.approx(gripper)
 
     def test_output_shape_and_dtype(self):
         T = np.eye(4)
-        dof8 = se3_to_8dof(T, 1.0)
+        dof8 = se3_to_pos_quat_g(T, 1.0)
         assert dof8.shape == (8,)
         assert dof8.dtype == np.float32
 
     def test_position_preserved(self):
         pos = np.array([1.5, -2.0, 0.3])
         T = pos_rotmat_to_se3(pos, np.eye(3))
-        dof8 = se3_to_8dof(T, 0.0)
+        dof8 = se3_to_pos_quat_g(T, 0.0)
         np.testing.assert_allclose(dof8[:3], pos, atol=1e-6)
 
 
@@ -164,28 +164,28 @@ class Test10DOF:
         dof10 = np.zeros(10, dtype=np.float32)
         dof10[3] = 1.0  # r11
         dof10[7] = 1.0  # r22
-        T = se3_from_10dof(dof10)
+        T = se3_from_pos_rot6d_g(dof10)
         np.testing.assert_allclose(T, np.eye(4), atol=1e-6)
 
     @pytest.mark.parametrize("gripper", [0.0, 0.5, 1.0])
     def test_roundtrip(self, gripper: float):
         np.random.seed(99)
         T = _random_se3()
-        dof10 = se3_to_10dof(T, gripper)
-        T_recovered = se3_from_10dof(dof10)
+        dof10 = se3_to_pos_rot6d_g(T, gripper)
+        T_recovered = se3_from_pos_rot6d_g(dof10)
         np.testing.assert_allclose(T_recovered, T, atol=1e-5)
         assert dof10[-1] == pytest.approx(gripper)
 
     def test_output_shape_and_dtype(self):
         T = np.eye(4)
-        dof10 = se3_to_10dof(T, 1.0)
+        dof10 = se3_to_pos_rot6d_g(T, 1.0)
         assert dof10.shape == (10,)
         assert dof10.dtype == np.float32
 
     def test_position_preserved(self):
         pos = np.array([-0.5, 0.4, 1.2])
         T = pos_rotmat_to_se3(pos, np.eye(3))
-        dof10 = se3_to_10dof(T, 0.0)
+        dof10 = se3_to_pos_rot6d_g(T, 0.0)
         np.testing.assert_allclose(dof10[:3], pos, atol=1e-6)
 
 
@@ -200,8 +200,8 @@ class TestCrossConsistency:
         """8DOF and 10DOF encoding of the same SE(3) should reconstruct identically."""
         np.random.seed(_seed)
         T = _random_se3()
-        T_from_8 = se3_from_8dof(se3_to_8dof(T, 0.5))
-        T_from_10 = se3_from_10dof(se3_to_10dof(T, 0.5))
+        T_from_8 = se3_from_pos_quat_g(se3_to_pos_quat_g(T, 0.5))
+        T_from_10 = se3_from_pos_rot6d_g(se3_to_pos_rot6d_g(T, 0.5))
         np.testing.assert_allclose(T_from_8, T_from_10, atol=1e-5)
 
 
@@ -212,25 +212,25 @@ class TestCrossConsistency:
 
 class TestRelativeReconstruction:
     @pytest.mark.parametrize("_seed", range(5))
-    def test_8dof_relative_roundtrip(self, _seed: int):
-        """T_init @ se3_from_8dof(se3_to_8dof(inv(T_init) @ T_target)) ≈ T_target."""
+    def test_pos_quat_g_relative_roundtrip(self, _seed: int):
+        """T_init @ se3_from_pos_quat_g(se3_to_pos_quat_g(inv(T_init) @ T_target)) ≈ T_target."""
         np.random.seed(_seed)
         T_init = _random_se3()
         T_target = _random_se3()
         T_rel = np.linalg.inv(T_init) @ T_target
-        dof8_rel = se3_to_8dof(T_rel, 0.7)
-        T_reconstructed = T_init @ se3_from_8dof(dof8_rel)
+        dof8_rel = se3_to_pos_quat_g(T_rel, 0.7)
+        T_reconstructed = T_init @ se3_from_pos_quat_g(dof8_rel)
         np.testing.assert_allclose(T_reconstructed, T_target, atol=1e-4)
 
     @pytest.mark.parametrize("_seed", range(5))
-    def test_10dof_relative_roundtrip(self, _seed: int):
-        """T_init @ se3_from_10dof(se3_to_10dof(inv(T_init) @ T_target)) ≈ T_target."""
+    def test_pos_rot6d_g_relative_roundtrip(self, _seed: int):
+        """T_init @ se3_from_pos_rot6d_g(se3_to_pos_rot6d_g(inv(T_init) @ T_target)) ≈ T_target."""
         np.random.seed(_seed)
         T_init = _random_se3()
         T_target = _random_se3()
         T_rel = np.linalg.inv(T_init) @ T_target
-        dof10_rel = se3_to_10dof(T_rel, 0.3)
-        T_reconstructed = T_init @ se3_from_10dof(dof10_rel)
+        dof10_rel = se3_to_pos_rot6d_g(T_rel, 0.3)
+        T_reconstructed = T_init @ se3_from_pos_rot6d_g(dof10_rel)
         np.testing.assert_allclose(T_reconstructed, T_target, atol=1e-4)
 
     def test_position_matches_after_relative_reconstruction(self):
@@ -240,6 +240,6 @@ class TestRelativeReconstruction:
         target_pos = np.array([-0.15, 0.45, 0.36])
         T_target = pos_rotmat_to_se3(target_pos, _random_rotation())
         T_rel = np.linalg.inv(T_init) @ T_target
-        dof8_rel = se3_to_8dof(T_rel, 1.0)
-        T_abs = T_init @ se3_from_8dof(dof8_rel)
+        dof8_rel = se3_to_pos_quat_g(T_rel, 1.0)
+        T_abs = T_init @ se3_from_pos_quat_g(dof8_rel)
         np.testing.assert_allclose(T_abs[:3, 3], target_pos, atol=1e-5)

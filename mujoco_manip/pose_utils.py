@@ -151,7 +151,7 @@ def rotmat_from_6d(d6: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def se3_to_8dof(T: np.ndarray, gripper: float) -> np.ndarray:
+def se3_to_pos_quat_g(T: np.ndarray, gripper: float) -> np.ndarray:
     """Convert SE(3) + gripper to 8DOF vector.
 
     Args:
@@ -166,7 +166,7 @@ def se3_to_8dof(T: np.ndarray, gripper: float) -> np.ndarray:
     return np.array([*pos, *q, gripper], dtype=np.float32)
 
 
-def se3_to_10dof(T: np.ndarray, gripper: float) -> np.ndarray:
+def se3_to_pos_rot6d_g(T: np.ndarray, gripper: float) -> np.ndarray:
     """Convert SE(3) + gripper to 10DOF vector.
 
     Args:
@@ -181,7 +181,7 @@ def se3_to_10dof(T: np.ndarray, gripper: float) -> np.ndarray:
     return np.array([*pos, *rot6, gripper], dtype=np.float32)
 
 
-def se3_from_8dof(dof8: np.ndarray) -> np.ndarray:
+def se3_from_pos_quat_g(dof8: np.ndarray) -> np.ndarray:
     """Parse 8DOF vector to 4x4 SE(3). Gripper value is ignored.
 
     Args:
@@ -195,7 +195,7 @@ def se3_from_8dof(dof8: np.ndarray) -> np.ndarray:
     return pos_rotmat_to_se3(pos, R)
 
 
-def se3_from_10dof(dof10: np.ndarray) -> np.ndarray:
+def se3_from_pos_rot6d_g(dof10: np.ndarray) -> np.ndarray:
     """Parse 10DOF vector to 4x4 SE(3). Gripper value is ignored.
 
     Args:

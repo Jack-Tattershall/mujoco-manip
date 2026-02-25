@@ -28,13 +28,20 @@ uv run python main.py --randomize --seed 42
 ```python
 from mujoco_manip.gym_env import PickPlaceGymEnv
 
-# Default: ee_8dof action mode, random task from all 9 object-bin combos
+# Default: ee_pos_quat_g_rel action mode (relative to initial EE pose),
+# random task from all 9 object-bin combos
 env = PickPlaceGymEnv()
 obs, info = env.reset()
 obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 
-# 10DOF actions (6D rotation representation)
-env = PickPlaceGymEnv(action_mode="ee_10dof")
+# Relative actions with 6D rotation (relative to initial EE pose)
+env = PickPlaceGymEnv(action_mode="ee_pos_rot6d_g_rel")
+
+# Absolute SE(3) actions in world frame (quaternion)
+env = PickPlaceGymEnv(action_mode="ee_pos_quat_g")
+
+# Absolute SE(3) actions in world frame (6D rotation)
+env = PickPlaceGymEnv(action_mode="ee_pos_rot6d_g")
 
 # Absolute position actions (legacy 4D)
 env = PickPlaceGymEnv(action_mode="abs_pos")
@@ -72,7 +79,7 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-rand num_episo
 
 ## Visualise a dataset
 
-Custom visualizer that logs **all** dataset features to [Rerun](https://rerun.io/) — images, EE states (8dof/10dof), actions, keypoints, and target bin one-hot — with named scalar dimensions.
+Custom visualizer that logs **all** dataset features to [Rerun](https://rerun.io/) — images, EE states (pos+quat / pos+rot6d), actions, keypoints, and target bin one-hot — with named scalar dimensions.
 
 ```bash
 # Open Rerun viewer for episode 0
@@ -90,15 +97,15 @@ The visualizer also logs 3D point trails in Rerun under the `3d/` entity tree �
 Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify they reproduce the original trajectory.
 
 ```bash
-# Replay absolute 8DOF actions
+# Replay absolute pos+quat actions
 uv run python scripts/replay_actions.py \
     --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --action-key action.ee.8dof
+    --episode-index 0 --action-key action.ee.pos_quat_g
 
 # Replay relative actions (reconstructed via T_initial)
 uv run python scripts/replay_actions.py \
     --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --action-key action.ee.8dof_rel
+    --episode-index 0 --action-key action.ee.pos_quat_g_rel
 
 # Slow motion (2x slower)
 uv run python scripts/replay_actions.py \
@@ -112,8 +119,8 @@ uv run python scripts/replay_actions.py \
 # Login (one-time)
 uv run huggingface-cli login
 
-# Upload to the kinisi org
-uv run huggingface-cli upload kinisi/pick-place ./datasets/user/pick-place --repo-type dataset --private
+# Upload to the hf org
+uv run huggingface-cli upload user/pick-place ./datasets/user/pick-place --repo-type dataset --private
 ```
 
 ## Run tests
