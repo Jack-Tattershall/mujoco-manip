@@ -93,6 +93,11 @@ FEATURES = {
         "shape": (2,),
         "names": None,
     },
+    "observation.phase_description": {
+        "dtype": "string",
+        "shape": (1,),
+        "names": None,
+    },
 }
 
 DIM_NAMES: dict[str, list[str]] = {

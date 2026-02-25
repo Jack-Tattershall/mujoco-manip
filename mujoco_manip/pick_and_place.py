@@ -23,6 +23,32 @@ class State(Enum):
     DONE = auto()
 
 
+class Phase(Enum):
+    IDLE = "idle"
+    APPROACHING = "approaching"
+    GRASPING = "grasping"
+    LIFTING = "lifting"
+    TRANSPORTING = "transporting"
+    PLACING = "placing"
+    RETREATING = "retreating"
+    DONE = "done"
+
+
+_STATE_TO_PHASE = {
+    State.IDLE: Phase.IDLE,
+    State.PRE_GRASP: Phase.APPROACHING,
+    State.GRASP: Phase.GRASPING,
+    State.CLOSE_GRIPPER: Phase.GRASPING,
+    State.LIFT: Phase.LIFTING,
+    State.MOVE_TO_BIN: Phase.TRANSPORTING,
+    State.SETTLE_AT_BIN: Phase.TRANSPORTING,
+    State.LOWER_TO_BIN: Phase.PLACING,
+    State.RELEASE: Phase.PLACING,
+    State.RETREAT: Phase.RETREATING,
+    State.DONE: Phase.DONE,
+}
+
+
 # Task definitions: (object body name, bin body name)
 TASKS = [
     ("obj_red", "bin_red"),
@@ -81,6 +107,35 @@ class PickAndPlaceTask:
     def is_done(self) -> bool:
         """Return True if all tasks have been completed."""
         return self.state == State.DONE
+
+    @property
+    def phase(self) -> Phase:
+        """Return the current semantic phase of the FSM."""
+        return _STATE_TO_PHASE[self.state]
+
+    @property
+    def phase_description(self) -> str:
+        """Return a human-readable description of the current phase."""
+        phase = self.phase
+        if phase in (Phase.IDLE, Phase.DONE):
+            return "idle"
+        if phase == Phase.RETREATING:
+            return "retreating to neutral position"
+        obj_color = self._obj_name().replace("obj_", "")
+        bin_color = self._bin_name().replace("bin_", "")
+        match phase:
+            case Phase.APPROACHING:
+                return f"approaching the {obj_color} cube"
+            case Phase.GRASPING:
+                return f"grasping the {obj_color} cube"
+            case Phase.LIFTING:
+                return f"lifting the {obj_color} cube"
+            case Phase.TRANSPORTING:
+                return f"transporting the {obj_color} cube to the {bin_color} bin"
+            case Phase.PLACING:
+                return f"placing the {obj_color} cube in the {bin_color} bin"
+            case _:
+                return "idle"
 
     def _obj_name(self) -> str:
         """Return the current object body name."""

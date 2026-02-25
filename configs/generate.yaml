@@ -23,6 +23,7 @@ features:  # null for all, or a subset of these keys
   - observation.keypoints_wrist
   - observation.target_obj_keypoints_overhead
   - observation.target_bin_keypoints_overhead
+  - observation.phase_description
 
 hydra:
   job:

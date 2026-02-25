@@ -33,6 +33,7 @@ SKIP_KEYS: set[str] = {
     "task_index",
     "task",
     "observation.state",
+    "observation.phase_description",
 }
 
 KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]] = {
@@ -246,6 +247,10 @@ def visualize_episode(
             if isinstance(val, torch.Tensor):
                 val = val.numpy()
             rr.log("observation/target_bin_onehot", rr.BarChart(val))
+
+        if "observation.phase_description" in frame:
+            phase_val = frame["observation.phase_description"]
+            rr.log("phase_description", rr.TextLog(str(phase_val)))
 
         if "observation.target_obj_onehot" in frame:
             val = frame["observation.target_obj_onehot"]

@@ -195,6 +195,7 @@ def run_episode(
     )
     need_bin_onehot = "observation.target_bin_onehot" in feature_keys
     need_obj_onehot = "observation.target_obj_onehot" in feature_keys
+    need_phase_desc = "observation.phase_description" in feature_keys
 
     # Capture initial EE SE(3) and its inverse (needed for actions and relative states)
     need_initial_se3 = need_actions or (
@@ -316,6 +317,10 @@ def run_episode(
                     frame["action.ee.8dof_rel"] = action_8dof_rel
                 if "action.ee.10dof_rel" in feature_keys:
                     frame["action.ee.10dof_rel"] = action_10dof_rel
+
+            # Phase description
+            if need_phase_desc:
+                frame["observation.phase_description"] = task.phase_description
 
             # Task context
             if need_bin_onehot:
