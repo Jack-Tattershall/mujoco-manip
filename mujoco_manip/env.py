@@ -7,6 +7,8 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
+from .randomization import randomize_object_positions
+
 # Placeholder in the scene XML for the panda include path
 _PANDA_INCLUDE = 'file="third_party/mujoco_menagerie/franka_emika_panda/panda.xml"'
 
@@ -137,6 +139,22 @@ class PickPlaceEnv:
         if body_id < 0:
             raise ValueError(f"Body '{name}' not found")
         return self.data.xpos[body_id].copy()
+
+    def randomize_objects(
+        self, rng: np.random.Generator, **kwargs
+    ) -> dict[str, np.ndarray]:
+        """Randomize object positions and propagate to xpos.
+
+        Args:
+            rng: NumPy random generator for reproducibility.
+            **kwargs: Forwarded to ``randomize_object_positions``.
+
+        Returns:
+            Dict mapping joint name to new (x, y, z) position.
+        """
+        result = randomize_object_positions(self.model, self.data, rng, **kwargs)
+        mujoco.mj_forward(self.model, self.data)
+        return result
 
     def get_body_xmat(self, name: str) -> np.ndarray:
         """Return rotation matrix (3, 3) of a named body.

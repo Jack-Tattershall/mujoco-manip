@@ -139,6 +139,8 @@ def run_episode(
     obj_name: str,
     bin_name: str,
     feature_keys: set[str],
+    rng: np.random.Generator | None = None,
+    randomize_kwargs: dict | None = None,
 ) -> list[dict]:
     """Run one expert FSM episode and collect frames.
 
@@ -150,11 +152,17 @@ def run_episode(
         obj_name: Object body name.
         bin_name: Target bin body name.
         feature_keys: Set of feature keys to include in each frame.
+        rng: If provided, randomize object positions before the episode.
+        randomize_kwargs: Extra keyword arguments for ``env.randomize_objects``.
 
     Returns:
         List of frame dicts with only the requested features.
     """
+    if randomize_kwargs is None:
+        randomize_kwargs = {}
     env.reset_to_keyframe("scene_start")
+    if rng is not None:
+        env.randomize_objects(rng, **randomize_kwargs)
 
     # Check which feature groups are needed
     need_images = bool(
@@ -370,8 +378,17 @@ def main(cfg: DictConfig) -> None:
         image_writer_threads=4,
     )
 
+    # Optional seeded RNG for object position randomization
+    rng = np.random.default_rng(cfg.seed) if cfg.randomize_objects else None
+    randomize_kwargs = {}
+    if rng is not None:
+        randomize_kwargs["x_range"] = tuple(cfg.spawn_x_range)
+        randomize_kwargs["y_range"] = tuple(cfg.spawn_y_range)
+
     # Generate episodes, cycling through tasks
     print(f"Task set '{cfg.tasks}': {len(task_list)} task(s)")
+    if rng is not None:
+        print(f"Object randomization enabled (seed={cfg.seed})")
     for ep_idx in range(cfg.num_episodes):
         task_idx = ep_idx % len(task_list)
         obj_name, bin_name = task_list[task_idx]
@@ -383,7 +400,15 @@ def main(cfg: DictConfig) -> None:
         )
 
         frames = run_episode(
-            env, robot, controller, renderer, obj_name, bin_name, feature_keys
+            env,
+            robot,
+            controller,
+            renderer,
+            obj_name,
+            bin_name,
+            feature_keys,
+            rng=rng,
+            randomize_kwargs=randomize_kwargs,
         )
 
         for frame in frames:

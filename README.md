@@ -18,6 +18,9 @@ Opens a MuJoCo viewer and runs the FSM to pick and place all 3 coloured cubes in
 
 ```bash
 uv run python main.py
+
+# Randomize object positions
+uv run python main.py --randomize --seed 42
 ```
 
 ## Gymnasium environment
@@ -41,6 +44,9 @@ env = PickPlaceGymEnv(task=("obj_red", "bin_blue"))
 
 # Use a task set: "all" (9), "match" (3 colour-matched), "cross" (6 cross-colour)
 env = PickPlaceGymEnv(tasks="match")
+
+# Randomize object positions on each reset (useful for training generalizable policies)
+env = PickPlaceGymEnv(randomize_objects=True)
 ```
 
 ## Generate a LeRobot dataset
@@ -56,6 +62,9 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-match num_epis
 
 # Only cross-colour tasks, custom root
 uv run python scripts/generate_dataset.py repo_id=user/pick-place-cross num_episodes=60 tasks=cross root=./my-datasets
+
+# Randomize object positions each episode (seeded for reproducibility)
+uv run python scripts/generate_dataset.py repo_id=user/pick-place-rand num_episodes=100 randomize_objects=true seed=42
 ```
 
 ## Visualise a dataset

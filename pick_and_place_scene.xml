@@ -107,21 +107,21 @@
     <body name="obj_red" pos="-0.15 0.45 0.26">
       <freejoint name="obj_red_jnt"/>
       <geom name="obj_red_geom" type="box" size="0.02 0.02 0.02" material="red_mat"
-            mass="0.05" condim="4" friction="1.5 0.5 0.01"/>
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
     </body>
 
     <!-- Green cube -->
     <body name="obj_green" pos="0.0 0.45 0.26">
       <freejoint name="obj_green_jnt"/>
       <geom name="obj_green_geom" type="box" size="0.02 0.02 0.02" material="green_mat"
-            mass="0.05" condim="4" friction="1.5 0.5 0.01"/>
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
     </body>
 
     <!-- Blue cube -->
     <body name="obj_blue" pos="0.15 0.45 0.26">
       <freejoint name="obj_blue_jnt"/>
       <geom name="obj_blue_geom" type="box" size="0.02 0.02 0.02" material="blue_mat"
-            mass="0.05" condim="4" friction="1.5 0.5 0.01"/>
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
     </body>
   </worldbody>
 

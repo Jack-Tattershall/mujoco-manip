@@ -5,6 +5,8 @@ import os
 import sys
 import time
 
+import numpy as np
+
 from mujoco_manip.env import PickPlaceEnv
 from mujoco_manip.robot import PandaRobot
 from mujoco_manip.controller import IKController
@@ -23,6 +25,14 @@ def main() -> None:
     parser.add_argument(
         "--slow", type=float, default=1.0, help="Slowdown factor (e.g. 2 = half speed)"
     )
+    parser.add_argument(
+        "--randomize",
+        action="store_true",
+        help="Randomize object positions each episode",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=0, help="Random seed for object randomization"
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(MENAGERIE_DIR):
@@ -30,9 +40,14 @@ def main() -> None:
         print("Run: bash setup_menagerie.sh")
         sys.exit(1)
 
+    rng = np.random.default_rng(args.seed) if args.randomize else None
+
     print("Loading scene...")
     env = PickPlaceEnv(SCENE_XML)
     env.reset_to_keyframe("scene_start")
+    if rng is not None:
+        env.randomize_objects(rng)
+        print("Randomized object positions (seed={})".format(args.seed))
 
     robot = PandaRobot(env.model, env.data)
     controller = IKController(env.model, env.data, robot)

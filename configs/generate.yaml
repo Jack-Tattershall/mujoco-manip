@@ -2,10 +2,13 @@ repo_id: null
 num_episodes: 100
 root: ./datasets
 tasks: all
+randomize_objects: false
+seed: 0
+spawn_x_range: [-0.20, 0.20]
+spawn_y_range: [0.30, 0.45]
 features:  # null for all, or a subset of these keys
   - observation.images.overhead
   - observation.images.wrist
-  - observation.state
   - observation.state.ee.8dof
   - observation.state.ee.10dof
   - observation.state.ee.8dof_rel

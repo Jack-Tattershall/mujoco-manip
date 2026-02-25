@@ -16,6 +16,8 @@ class State(Enum):
     CLOSE_GRIPPER = auto()
     LIFT = auto()
     MOVE_TO_BIN = auto()
+    SETTLE_AT_BIN = auto()
+    LOWER_TO_BIN = auto()
     RELEASE = auto()
     RETREAT = auto()
     DONE = auto()
@@ -33,12 +35,17 @@ TASKS = [
 # Table surface at z=0.24, object center at z=0.26
 PRE_GRASP_HEIGHT = 0.44  # hover above object
 GRASP_HEIGHT = 0.36  # finger pads at cube center level
-LIFT_HEIGHT = 0.50
-PLACE_HEIGHT = 0.45
-RETREAT_HEIGHT = 0.50
+LIFT_HEIGHT = 0.55
+TRANSIT_HEIGHT = 0.55  # lateral move height (clears bins)
+RELEASE_HEIGHT = 0.45  # lower to this before releasing
+RETREAT_HEIGHT = 0.55
 
-# Gripper settle time (simulation steps)
+# Settle times (simulation steps)
 GRIPPER_SETTLE_STEPS = 150
+BIN_SETTLE_STEPS = 100  # let cube stop swinging after lateral move
+
+# Maximum EE target speed during transit (m per physics step)
+TRANSIT_SPEED = 0.001
 
 
 class PickAndPlaceTask:
@@ -68,6 +75,7 @@ class PickAndPlaceTask:
         self.task_index: int = 0
         self.settle_counter: int = 0
         self._target_pos: np.ndarray | None = None
+        self._transit_end: np.ndarray | None = None
 
     @property
     def is_done(self) -> bool:
@@ -144,12 +152,42 @@ class PickAndPlaceTask:
             self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
                 bin_xy = self._bin_xy()
-                self._target_pos = np.array([bin_xy[0], bin_xy[1], PLACE_HEIGHT])
+                self._transit_end = np.array([bin_xy[0], bin_xy[1], TRANSIT_HEIGHT])
+                # Start target at current lift position; will be interpolated
+                self._target_pos = self._target_pos.copy()
                 self.state = State.MOVE_TO_BIN
                 return f"Moving {self._obj_name()} to {self._bin_name()}"
             return f"Lifting {self._obj_name()}"
 
         elif self.state == State.MOVE_TO_BIN:
+            # Interpolate target toward bin at capped speed
+            diff = self._transit_end - self._target_pos
+            dist = np.linalg.norm(diff)
+            if dist > TRANSIT_SPEED:
+                self._target_pos += diff * (TRANSIT_SPEED / dist)
+            else:
+                self._target_pos = self._transit_end.copy()
+            q = self.controller.compute(self._target_pos)
+            self.robot.set_arm_ctrl(q)
+            if dist <= self.controller.pos_tolerance:
+                self.settle_counter = BIN_SETTLE_STEPS
+                self.state = State.SETTLE_AT_BIN
+                return f"Settling above {self._bin_name()}"
+            return f"Transporting {self._obj_name()}"
+
+        elif self.state == State.SETTLE_AT_BIN:
+            # Hold position and let the cube stop swinging
+            q = self.controller.compute(self._target_pos)
+            self.robot.set_arm_ctrl(q)
+            self.settle_counter -= 1
+            if self.settle_counter <= 0:
+                bin_xy = self._bin_xy()
+                self._target_pos = np.array([bin_xy[0], bin_xy[1], RELEASE_HEIGHT])
+                self.state = State.LOWER_TO_BIN
+                return f"Lowering {self._obj_name()} into {self._bin_name()}"
+            return f"Settling above {self._bin_name()} ({self.settle_counter})"
+
+        elif self.state == State.LOWER_TO_BIN:
             q = self.controller.compute(self._target_pos)
             self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
@@ -157,7 +195,7 @@ class PickAndPlaceTask:
                 self.settle_counter = GRIPPER_SETTLE_STEPS
                 self.state = State.RELEASE
                 return f"Releasing {self._obj_name()} into {self._bin_name()}"
-            return f"Transporting {self._obj_name()}"
+            return f"Lowering to {self._bin_name()}"
 
         elif self.state == State.RELEASE:
             # Keep arm steady while gripper opens
