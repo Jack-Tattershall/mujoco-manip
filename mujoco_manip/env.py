@@ -7,16 +7,15 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
+from .data import PANDA_DIR as _DEFAULT_PANDA_DIR
+from .data import SCENE_XML as _DEFAULT_SCENE_XML
 from .randomization import randomize_object_positions
-
-# Placeholder in the scene XML for the panda include path
-_PANDA_INCLUDE = 'file="third_party/mujoco_menagerie/franka_emika_panda/panda.xml"'
 
 
 def _load_scene(
     xml_path: str, panda_dir: str, add_wrist_camera: bool = False
 ) -> mujoco.MjModel:
-    """Load the scene XML from the panda model directory.
+    """Load the scene XML, resolving robot meshes from *panda_dir*.
 
     MuJoCo resolves ``<include>`` and ``meshdir`` relative to the loading
     file's directory. We write a temp copy of the scene XML into the panda
@@ -35,7 +34,13 @@ def _load_scene(
     with open(xml_path) as f:
         xml = f.read()
 
-    xml = xml.replace(_PANDA_INCLUDE, 'file="panda.xml"')
+    # If the scene still references the old third_party path, fix it.
+    xml = xml.replace(
+        'file="third_party/mujoco_menagerie/franka_emika_panda/panda.xml"',
+        'file="panda.xml"',
+    )
+    # Also handle the bundled data/ layout.
+    xml = xml.replace('file="franka_emika_panda/panda.xml"', 'file="panda.xml"')
     xml = xml.replace('<compiler angle="radian"/>\n\n', "")
 
     abs_panda_dir = os.path.abspath(panda_dir)
@@ -68,24 +73,23 @@ class PickPlaceEnv:
 
     def __init__(
         self,
-        xml_path: str,
+        xml_path: str | None = None,
         panda_dir: str | None = None,
         add_wrist_camera: bool = False,
     ) -> None:
         """Initialise the environment.
 
         Args:
-            xml_path: Path to the MuJoCo scene XML.
-            panda_dir: Directory containing ``panda.xml``. Defaults to
-                ``third_party/mujoco_menagerie/franka_emika_panda`` relative
-                to *xml_path*.
+            xml_path: Path to the MuJoCo scene XML. Defaults to the bundled
+                scene included with the package.
+            panda_dir: Directory containing ``panda.xml``. Defaults to the
+                bundled Franka Panda model included with the package.
             add_wrist_camera: If True, inject a wrist camera on the hand body.
         """
+        if xml_path is None:
+            xml_path = _DEFAULT_SCENE_XML
         if panda_dir is None:
-            project_root = os.path.dirname(os.path.abspath(xml_path))
-            panda_dir = os.path.join(
-                project_root, "third_party", "mujoco_menagerie", "franka_emika_panda"
-            )
+            panda_dir = _DEFAULT_PANDA_DIR
         self.model: mujoco.MjModel = _load_scene(
             xml_path, panda_dir, add_wrist_camera=add_wrist_camera
         )

@@ -1,0 +1,137 @@
+<mujoco model="pick_and_place_scene">
+  <compiler angle="radian"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="150" elevation="-25"/>
+  </visual>
+
+  <statistic center="0.0 0.3 0.3" extent="1.2"/>
+
+  <include file="franka_emika_panda/panda.xml"/>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0.0 0.0 0.0"
+             width="512" height="3072"/>
+    <texture name="groundplane" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2"
+             width="300" height="300" mark="edge" markrgb="0.2 0.3 0.4"/>
+    <material name="groundplane" texture="groundplane" texrepeat="5 5" texuniform="true"
+              reflectance="0.2"/>
+    <material name="table_mat" rgba="0.6 0.5 0.4 1"/>
+    <material name="table_leg_mat" rgba="0.4 0.35 0.3 1"/>
+    <material name="red_mat" rgba="0.9 0.15 0.15 1"/>
+    <material name="green_mat" rgba="0.15 0.8 0.15 1"/>
+    <material name="blue_mat" rgba="0.15 0.15 0.9 1"/>
+    <material name="red_bin_mat" rgba="0.7 0.2 0.2 0.4"/>
+    <material name="green_bin_mat" rgba="0.2 0.6 0.2 0.4"/>
+    <material name="blue_bin_mat" rgba="0.2 0.2 0.7 0.4"/>
+  </asset>
+
+  <worldbody>
+    <!-- Lighting -->
+    <light pos="0 0 2.0" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8"
+           specular="0.3 0.3 0.3" castshadow="true"/>
+    <light pos="0.5 0.5 1.5" diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>
+
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="2 2 0.01" material="groundplane" pos="0 0 0"/>
+
+    <!-- Camera -->
+    <camera name="overhead" pos="0.0 0.0 2.0" xyaxes="1 0 0 0 1 0" mode="fixed"/>
+    <camera name="side" pos="1.2 -0.3 0.8" xyaxes="0 1 0 -0.4 0 0.9" mode="fixed"/>
+
+    <!-- ============ TABLE ============ -->
+    <body name="table" pos="0.0 0.45 0.0">
+      <!-- Tabletop: 0.8m x 0.6m, surface at z=0.22 -->
+      <geom name="tabletop" type="box" size="0.4 0.3 0.02" pos="0 0 0.22"
+            material="table_mat" mass="20"/>
+      <!-- Legs -->
+      <geom name="leg1" type="cylinder" size="0.025 0.10" pos=" 0.35  0.25 0.10"
+            material="table_leg_mat"/>
+      <geom name="leg2" type="cylinder" size="0.025 0.10" pos="-0.35  0.25 0.10"
+            material="table_leg_mat"/>
+      <geom name="leg3" type="cylinder" size="0.025 0.10" pos=" 0.35 -0.25 0.10"
+            material="table_leg_mat"/>
+      <geom name="leg4" type="cylinder" size="0.025 0.10" pos="-0.35 -0.25 0.10"
+            material="table_leg_mat"/>
+    </body>
+
+    <!-- ============ BINS ============ -->
+    <!-- Red bin (left) — 12cm x 12cm x 6cm open-top box -->
+    <body name="bin_red" pos="-0.3 0.55 0.24">
+      <geom name="bin_red_bottom" type="box" size="0.06 0.06 0.002" pos="0 0 0"
+            material="red_bin_mat"/>
+      <geom name="bin_red_front" type="box" size="0.06 0.002 0.03" pos="0 -0.06 0.03"
+            material="red_bin_mat"/>
+      <geom name="bin_red_back" type="box" size="0.06 0.002 0.03" pos="0 0.06 0.03"
+            material="red_bin_mat"/>
+      <geom name="bin_red_left" type="box" size="0.002 0.06 0.03" pos="-0.06 0 0.03"
+            material="red_bin_mat"/>
+      <geom name="bin_red_right" type="box" size="0.002 0.06 0.03" pos="0.06 0 0.03"
+            material="red_bin_mat"/>
+    </body>
+
+    <!-- Green bin (center) -->
+    <body name="bin_green" pos="0.0 0.65 0.24">
+      <geom name="bin_green_bottom" type="box" size="0.06 0.06 0.002" pos="0 0 0"
+            material="green_bin_mat"/>
+      <geom name="bin_green_front" type="box" size="0.06 0.002 0.03" pos="0 -0.06 0.03"
+            material="green_bin_mat"/>
+      <geom name="bin_green_back" type="box" size="0.06 0.002 0.03" pos="0 0.06 0.03"
+            material="green_bin_mat"/>
+      <geom name="bin_green_left" type="box" size="0.002 0.06 0.03" pos="-0.06 0 0.03"
+            material="green_bin_mat"/>
+      <geom name="bin_green_right" type="box" size="0.002 0.06 0.03" pos="0.06 0 0.03"
+            material="green_bin_mat"/>
+    </body>
+
+    <!-- Blue bin (right) -->
+    <body name="bin_blue" pos="0.3 0.55 0.24">
+      <geom name="bin_blue_bottom" type="box" size="0.06 0.06 0.002" pos="0 0 0"
+            material="blue_bin_mat"/>
+      <geom name="bin_blue_front" type="box" size="0.06 0.002 0.03" pos="0 -0.06 0.03"
+            material="blue_bin_mat"/>
+      <geom name="bin_blue_back" type="box" size="0.06 0.002 0.03" pos="0 0.06 0.03"
+            material="blue_bin_mat"/>
+      <geom name="bin_blue_left" type="box" size="0.002 0.06 0.03" pos="-0.06 0 0.03"
+            material="blue_bin_mat"/>
+      <geom name="bin_blue_right" type="box" size="0.002 0.06 0.03" pos="0.06 0 0.03"
+            material="blue_bin_mat"/>
+    </body>
+
+    <!-- ============ OBJECTS ============ -->
+    <!-- Red cube -->
+    <body name="obj_red" pos="-0.15 0.45 0.26">
+      <freejoint name="obj_red_jnt"/>
+      <geom name="obj_red_geom" type="box" size="0.02 0.02 0.02" material="red_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+
+    <!-- Green cube -->
+    <body name="obj_green" pos="0.0 0.45 0.26">
+      <freejoint name="obj_green_jnt"/>
+      <geom name="obj_green_geom" type="box" size="0.02 0.02 0.02" material="green_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+
+    <!-- Blue cube -->
+    <body name="obj_blue" pos="0.15 0.45 0.26">
+      <freejoint name="obj_blue_jnt"/>
+      <geom name="obj_blue_geom" type="box" size="0.02 0.02 0.02" material="blue_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <!-- Ready pose: arm extended over workspace, gripper open, then object free-joint states (7 each: pos3 + quat4) -->
+    <key name="scene_start"
+         qpos="1.5708 -0.2 0 -2.1 0 1.8 0.785 0.04 0.04
+               -0.15 0.45 0.26 1 0 0 0
+                0.0  0.45 0.26 1 0 0 0
+                0.15 0.45 0.26 1 0 0 0"
+         ctrl="1.5708 -0.2 0 -2.1 0 1.8 0.785 255"/>
+  </keyframe>
+</mujoco>

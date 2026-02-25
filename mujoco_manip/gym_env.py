@@ -1,7 +1,5 @@
 """Gymnasium-compatible pick-and-place environment."""
 
-import os
-
 import gymnasium as gym
 import mujoco
 import numpy as np
@@ -26,10 +24,8 @@ from .pose_utils import (
     se3_to_8dof,
     se3_to_10dof,
 )
+from .data import SCENE_XML as _DEFAULT_XML
 from .robot import PandaRobot
-
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_DEFAULT_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 
 ACTION_MODES = ("abs_pos", "ee_8dof", "ee_10dof")
 
