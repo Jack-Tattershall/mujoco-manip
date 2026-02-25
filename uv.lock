@@ -1009,7 +1009,7 @@ wheels = [
 [[package]]
 name = "mujoco-manip"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "gymnasium" },
     { name = "hydra-core" },

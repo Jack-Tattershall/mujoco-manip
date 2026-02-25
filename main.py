@@ -5,10 +5,10 @@ import os
 import sys
 import time
 
-from src.env import PickPlaceEnv
-from src.robot import PandaRobot
-from src.controller import IKController
-from src.pick_and_place import PickAndPlaceTask
+from mujoco_manip.env import PickPlaceEnv
+from mujoco_manip.robot import PandaRobot
+from mujoco_manip.controller import IKController
+from mujoco_manip.pick_and_place import PickAndPlaceTask
 
 
 SCENE_XML = os.path.join(os.path.dirname(__file__), "pick_and_place_scene.xml")

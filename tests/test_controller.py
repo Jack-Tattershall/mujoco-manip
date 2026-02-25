@@ -5,9 +5,9 @@ import os
 import numpy as np
 import pytest
 
-from src.controller import IKController, TARGET_ORI
-from src.env import PickPlaceEnv
-from src.robot import PandaRobot
+from mujoco_manip.controller import IKController, TARGET_ORI
+from mujoco_manip.env import PickPlaceEnv
+from mujoco_manip.robot import PandaRobot
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")

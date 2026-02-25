@@ -16,8 +16,8 @@ sys.path.insert(0, _PROJECT_ROOT)
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 
-from src.features import DIM_NAMES  # noqa: E402
-from src.pose_utils import (  # noqa: E402
+from mujoco_manip.features import DIM_NAMES  # noqa: E402
+from mujoco_manip.pose_utils import (  # noqa: E402
     pos_rotmat_to_se3,
     se3_from_8dof,
     se3_from_10dof,
@@ -131,8 +131,8 @@ def visualize_episode(
         or has_action_rel_10dof
     )
     if has_any_rel:
-        from src.env import PickPlaceEnv  # noqa: E402
-        from src.robot import PandaRobot  # noqa: E402
+        from mujoco_manip.env import PickPlaceEnv  # noqa: E402
+        from mujoco_manip.robot import PandaRobot  # noqa: E402
 
         _env = PickPlaceEnv(SCENE_XML, add_wrist_camera=False)
         _robot = PandaRobot(_env.model, _env.data)

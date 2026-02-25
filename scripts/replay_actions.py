@@ -13,11 +13,11 @@ sys.path.insert(0, _PROJECT_ROOT)
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
 
-from src.constants import ACTION_REPEAT  # noqa: E402
-from src.controller import IKController  # noqa: E402
-from src.env import PickPlaceEnv  # noqa: E402
-from src.pose_utils import pos_rotmat_to_se3, se3_from_8dof, se3_from_10dof  # noqa: E402
-from src.robot import PandaRobot  # noqa: E402
+from mujoco_manip.constants import ACTION_REPEAT  # noqa: E402
+from mujoco_manip.controller import IKController  # noqa: E402
+from mujoco_manip.env import PickPlaceEnv  # noqa: E402
+from mujoco_manip.pose_utils import pos_rotmat_to_se3, se3_from_8dof, se3_from_10dof  # noqa: E402
+from mujoco_manip.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 

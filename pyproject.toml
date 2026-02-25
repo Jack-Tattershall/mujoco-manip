@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build>=0.7.19,<0.8.0"]
+build-backend = "uv_build"
+
 [project]
 name = "mujoco-manip"
 version = "0.1.0"
@@ -24,6 +28,9 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.uv.build-backend]
+module-root = ""
 
 [tool.ruff.format]
 docstring-code-format = true

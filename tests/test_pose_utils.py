@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.pose_utils import (
+from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     quat_xyzw_to_rotmat,
     rotmat_from_6d,

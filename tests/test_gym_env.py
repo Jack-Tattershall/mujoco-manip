@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from src.constants import (
+from mujoco_manip.constants import (
     KEYPOINT_BODIES,
 )
-from src.controller import TARGET_ORI
-from src.gym_env import PickPlaceGymEnv
-from src.pose_utils import (
+from mujoco_manip.controller import TARGET_ORI
+from mujoco_manip.gym_env import PickPlaceGymEnv
+from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     rotmat_to_6d,
     se3_to_8dof,

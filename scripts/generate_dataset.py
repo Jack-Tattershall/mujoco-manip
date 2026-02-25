@@ -14,8 +14,8 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
-from src.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d  # noqa: E402
-from src.constants import (  # noqa: E402
+from mujoco_manip.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d  # noqa: E402
+from mujoco_manip.constants import (  # noqa: E402
     ACTION_REPEAT,
     BINS,
     CONTROL_FPS,
@@ -23,12 +23,12 @@ from src.constants import (  # noqa: E402
     OBJECTS,
     TASK_SETS,
 )
-from src.controller import IKController, TARGET_ORI  # noqa: E402
-from src.env import PickPlaceEnv  # noqa: E402
-from src.features import FEATURES  # noqa: E402
-from src.pick_and_place import PickAndPlaceTask  # noqa: E402
-from src.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof  # noqa: E402
-from src.robot import PandaRobot  # noqa: E402
+from mujoco_manip.controller import IKController, TARGET_ORI  # noqa: E402
+from mujoco_manip.env import PickPlaceEnv  # noqa: E402
+from mujoco_manip.features import FEATURES  # noqa: E402
+from mujoco_manip.pick_and_place import PickAndPlaceTask  # noqa: E402
+from mujoco_manip.pose_utils import pos_rotmat_to_se3, se3_to_8dof, se3_to_10dof  # noqa: E402
+from mujoco_manip.robot import PandaRobot  # noqa: E402
 
 SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 

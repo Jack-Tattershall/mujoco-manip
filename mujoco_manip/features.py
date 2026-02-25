@@ -5,7 +5,7 @@ features) and ``visualize_dataset.py`` (to label scalar dimensions in
 Rerun).
 """
 
-from src.constants import IMAGE_SIZE
+from .constants import IMAGE_SIZE
 
 FEATURES = {
     "observation.images.overhead": {
