@@ -281,7 +281,10 @@ def main() -> None:
         help="Dataset repo ID (e.g. test/pick-place)",
     )
     parser.add_argument(
-        "--root", type=str, default=None, help="Local dataset root directory"
+        "--root",
+        type=str,
+        default="./datasets",
+        help="Parent directory containing datasets (default: ./datasets)",
     )
     parser.add_argument(
         "--episode-index", type=int, default=0, help="Episode index to visualize"
@@ -294,10 +297,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    dataset_root = os.path.join(args.root, args.repo_id)
     dataset = LeRobotDataset(
         args.repo_id,
         episodes=[args.episode_index],
-        root=args.root,
+        root=dataset_root,
     )
     visualize_episode(dataset, args.episode_index, save_path=args.save)
 

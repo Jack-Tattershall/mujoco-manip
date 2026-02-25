@@ -34,7 +34,10 @@ def main() -> None:
     )
     parser.add_argument("--repo-id", type=str, required=True, help="Dataset repo ID")
     parser.add_argument(
-        "--root", type=str, default=None, help="Local dataset root directory"
+        "--root",
+        type=str,
+        default="./datasets",
+        help="Parent directory containing datasets (default: ./datasets)",
     )
     parser.add_argument(
         "--episode-index", type=int, default=0, help="Episode index to replay"
@@ -53,10 +56,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    dataset_root = os.path.join(args.root, args.repo_id)
     dataset = LeRobotDataset(
         args.repo_id,
         episodes=[args.episode_index],
-        root=args.root,
+        root=dataset_root,
     )
     num_frames: int = len(dataset)
     print(f"Loaded episode {args.episode_index}: {num_frames} frames")
@@ -79,7 +83,6 @@ def main() -> None:
     env.reset_to_keyframe("scene_start")
 
     # Restore object randomization from generation metadata if available
-    dataset_root = args.root or os.path.join("datasets", args.repo_id)
     metadata_path = os.path.join(dataset_root, "metadata.json")
     if os.path.exists(metadata_path):
         with open(metadata_path) as f:

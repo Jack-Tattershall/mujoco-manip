@@ -83,10 +83,10 @@ Custom visualizer that logs **all** dataset features to [Rerun](https://rerun.io
 
 ```bash
 # Open Rerun viewer for episode 0
-uv run python scripts/visualize_dataset.py --repo-id user/pick-place --root ./datasets --episode-index 0
+uv run python scripts/visualize_dataset.py --repo-id user/pick-place --episode-index 0
 
 # Save a .rrd file for later viewing
-uv run python scripts/visualize_dataset.py --repo-id user/pick-place --root ./datasets --episode-index 0 --save ./viz/ep0.rrd
+uv run python scripts/visualize_dataset.py --repo-id user/pick-place --episode-index 0 --save ./viz/ep0.rrd
 rerun ./viz/ep0.rrd
 ```
 
@@ -99,18 +99,15 @@ Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify th
 ```bash
 # Replay absolute pos+quat actions
 uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --action-key action.ee.pos_quat_g
+    --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g
 
 # Replay relative actions (reconstructed via T_initial)
 uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --action-key action.ee.pos_quat_g_rel
+    --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g_rel
 
 # Slow motion (2x slower)
 uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --root ./datasets/user/pick-place \
-    --episode-index 0 --slow 2
+    --repo-id user/pick-place --episode-index 0 --slow 2
 ```
 
 ## Push a dataset to Hugging Face
