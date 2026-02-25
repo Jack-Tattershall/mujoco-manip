@@ -23,7 +23,7 @@ uv run python main.py
 ## Gymnasium environment
 
 ```python
-from src.gym_env import PickPlaceGymEnv
+from mujoco_manip.gym_env import PickPlaceGymEnv
 
 # Default: ee_8dof action mode, random task from all 9 object-bin combos
 env = PickPlaceGymEnv()
