@@ -42,7 +42,10 @@ env = PickPlaceGymEnv(action_mode="abs_pos")
 # Fix a specific task
 env = PickPlaceGymEnv(task=("obj_red", "bin_blue"))
 
-# Use a task set: "all" (9), "match" (3 colour-matched), "cross" (6 cross-colour)
+# Use a task set:
+#   "match" (3) — each object to its same-colour bin (red→red, green→green, blue→blue)
+#   "cross"  (6) — each object to a different-colour bin (red→green, red→blue, etc.)
+#   "all"    (9) — every object-bin combination (match + cross)
 env = PickPlaceGymEnv(tasks="match")
 
 # Randomize object positions on each reset (useful for training generalizable policies)
