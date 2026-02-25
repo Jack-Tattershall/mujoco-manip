@@ -379,17 +379,20 @@ def main(cfg: DictConfig) -> None:
         image_writer_threads=4,
     )
 
-    # Optional seeded RNG for object position randomization
-    rng = np.random.default_rng(cfg.seed) if cfg.randomize_objects else None
+    # Per-episode seeds for object position randomization
+    episode_seeds = None
     randomize_kwargs = {}
-    if rng is not None:
+    if cfg.randomize_objects:
+        ss = np.random.SeedSequence(cfg.seed)
+        child_seeds = ss.spawn(cfg.num_episodes)
+        episode_seeds = [int(cs.entropy) for cs in child_seeds]
         randomize_kwargs["x_range"] = tuple(cfg.spawn_x_range)
         randomize_kwargs["y_range"] = tuple(cfg.spawn_y_range)
 
     # Generate episodes, cycling through tasks
     print(f"Task set '{cfg.tasks}': {len(task_list)} task(s)")
-    if rng is not None:
-        print(f"Object randomization enabled (seed={cfg.seed})")
+    if episode_seeds is not None:
+        print(f"Object randomization enabled (seed={cfg.seed}, per-episode seeds)")
     for ep_idx in range(cfg.num_episodes):
         task_idx = ep_idx % len(task_list)
         obj_name, bin_name = task_list[task_idx]
@@ -398,6 +401,13 @@ def main(cfg: DictConfig) -> None:
             f"Episode {ep_idx + 1}/{cfg.num_episodes}: {obj_name} → {bin_name}",
             end="",
             flush=True,
+        )
+
+        # Create a fresh RNG per episode for independent reproducibility
+        rng = (
+            np.random.default_rng(episode_seeds[ep_idx])
+            if episode_seeds is not None
+            else None
         )
 
         frames = run_episode(
@@ -422,6 +432,9 @@ def main(cfg: DictConfig) -> None:
     generation_config = OmegaConf.to_container(cfg, resolve=True)
     # Remove hydra internals from the saved config
     generation_config.pop("hydra", None)
+    # Store per-episode seeds for O(1) replay of any episode
+    if episode_seeds is not None:
+        generation_config["episode_seeds"] = episode_seeds
 
     # Write standalone metadata.json
     metadata_path = dataset_path / "metadata.json"
