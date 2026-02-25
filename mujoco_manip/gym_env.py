@@ -64,6 +64,8 @@ class PickPlaceGymEnv(gym.Env):
         render_mode: str = "rgb_array",
         max_episode_steps: int = MAX_EPISODE_STEPS,
         randomize_objects: bool = False,
+        spawn_x_range: tuple[float, float] = (-0.20, 0.20),
+        spawn_y_range: tuple[float, float] = (0.30, 0.45),
     ) -> None:
         """Initialise the environment.
 
@@ -79,6 +81,8 @@ class PickPlaceGymEnv(gym.Env):
             render_mode: Gymnasium render mode.
             max_episode_steps: Truncation limit.
             randomize_objects: If True, randomize object positions on reset.
+            spawn_x_range: X-axis range for object randomization.
+            spawn_y_range: Y-axis range for object randomization.
         """
         super().__init__()
         if action_mode not in ACTION_MODES:
@@ -99,6 +103,8 @@ class PickPlaceGymEnv(gym.Env):
         self._max_episode_steps = max_episode_steps
         self._step_count = 0
         self._randomize_objects = randomize_objects
+        self._spawn_x_range = tuple(spawn_x_range)
+        self._spawn_y_range = tuple(spawn_y_range)
 
         self._env = PickPlaceEnv(xml_path, add_wrist_camera=True)
         self._robot = PandaRobot(self._env.model, self._env.data)
@@ -305,7 +311,11 @@ class PickPlaceGymEnv(gym.Env):
         self._step_count = 0
 
         if self._randomize_objects:
-            self._env.randomize_objects(self.np_random)
+            self._env.randomize_objects(
+                self.np_random,
+                x_range=self._spawn_x_range,
+                y_range=self._spawn_y_range,
+            )
 
         self._capture_initial_pose()
 

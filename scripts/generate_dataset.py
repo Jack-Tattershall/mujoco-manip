@@ -1,5 +1,6 @@
 """Generate a LeRobot v3.0 dataset from expert FSM demonstrations."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import hydra
 import mujoco
 import numpy as np
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 # Add project root to path
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -416,6 +417,25 @@ def main(cfg: DictConfig) -> None:
         dataset.save_episode()
 
         print(f" ({len(frames)} frames)")
+
+    # Save generation config as metadata
+    generation_config = OmegaConf.to_container(cfg, resolve=True)
+    # Remove hydra internals from the saved config
+    generation_config.pop("hydra", None)
+
+    # Write standalone metadata.json
+    metadata_path = dataset_path / "metadata.json"
+    with open(metadata_path, "w") as f:
+        json.dump(generation_config, f, indent=2)
+
+    # Also store in LeRobot info.json
+    try:
+        from lerobot.datasets.utils import write_info
+
+        dataset.meta.info["generation_config"] = generation_config
+        write_info(dataset.meta.info, dataset.meta.root)
+    except (ImportError, AttributeError):
+        pass
 
     # Finalize
     dataset.finalize()
