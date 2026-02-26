@@ -135,19 +135,7 @@ class PickPlaceGymEnv(gym.Env):
         self._obstacle_geom_ids: set[int] = set()
 
         if reward_type == "staged":
-            robot_bodies = {
-                "link0",
-                "link1",
-                "link2",
-                "link3",
-                "link4",
-                "link5",
-                "link6",
-                "link7",
-                "hand",
-                "left_finger",
-                "right_finger",
-            }
+            robot_bodies = self._robot.BODY_NAMES
             object_bodies = {"obj_red", "obj_green", "obj_blue"}
             for i in range(self._env.model.ngeom):
                 body_id = self._env.model.geom_bodyid[i]

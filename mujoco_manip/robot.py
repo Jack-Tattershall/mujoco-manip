@@ -18,6 +18,21 @@ class PandaRobot:
     GRIPPER_OPEN = 255.0
     GRIPPER_CLOSED = 0.0
     EE_BODY_NAME = "hand"
+    BODY_NAMES = frozenset(
+        {
+            "link0",
+            "link1",
+            "link2",
+            "link3",
+            "link4",
+            "link5",
+            "link6",
+            "link7",
+            "hand",
+            "left_finger",
+            "right_finger",
+        }
+    )
 
     def __init__(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         """Initialise the robot interface.
