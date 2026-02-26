@@ -349,12 +349,17 @@ def main(cfg: DictConfig) -> None:
     if not cfg.repo_id:
         raise ValueError("repo_id is required (e.g. repo_id=user/pick-place)")
 
-    if cfg.tasks not in TASK_SETS:
+    if cfg.task is not None:
+        task_pair = tuple(cfg.task)
+        if len(task_pair) != 2:
+            raise ValueError(f"task must be [obj, bin], got {task_pair}")
+        task_list = [task_pair]
+    elif cfg.tasks in TASK_SETS:
+        task_list = TASK_SETS[cfg.tasks]
+    else:
         raise ValueError(
             f"Unknown task set '{cfg.tasks}'. Choose from: {list(TASK_SETS.keys())}"
         )
-
-    task_list = TASK_SETS[cfg.tasks]
 
     # Filter features if a subset is specified
     features = FEATURES
@@ -405,7 +410,8 @@ def main(cfg: DictConfig) -> None:
         randomize_kwargs["y_range"] = tuple(cfg.spawn_y_range)
 
     # Generate episodes, cycling through tasks
-    print(f"Task set '{cfg.tasks}': {len(task_list)} task(s)")
+    task_label = str(list(cfg.task)) if cfg.task is not None else cfg.tasks
+    print(f"Tasks {task_label}: {len(task_list)} task(s)")
     if episode_seeds is not None:
         print(f"Object randomization enabled (seed={cfg.seed}, per-episode seeds)")
     for ep_idx in range(cfg.num_episodes):

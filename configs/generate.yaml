@@ -1,6 +1,7 @@
 repo_id: null
 num_episodes: 100
 root: ./datasets
+task: null  # single task, e.g. [obj_red, bin_red] — overrides tasks
 tasks: all
 randomize_objects: false
 seed: 0
