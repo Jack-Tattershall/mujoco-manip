@@ -405,7 +405,7 @@ def main(cfg: DictConfig) -> None:
     if cfg.randomize_objects:
         ss = np.random.SeedSequence(cfg.seed)
         child_seeds = ss.spawn(cfg.num_episodes)
-        episode_seeds = [int(cs.entropy) for cs in child_seeds]
+        episode_seeds = [int(cs.generate_state(1)[0]) for cs in child_seeds]
         randomize_kwargs["x_range"] = tuple(cfg.spawn_x_range)
         randomize_kwargs["y_range"] = tuple(cfg.spawn_y_range)
 
