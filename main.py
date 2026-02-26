@@ -43,7 +43,7 @@ def main() -> None:
     rng = np.random.default_rng(args.seed) if args.randomize else None
 
     print("Loading scene...")
-    env = PickPlaceEnv(SCENE_XML)
+    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=True)
     env.reset_to_keyframe("scene_start")
     if rng is not None:
         env.randomize_objects(rng)

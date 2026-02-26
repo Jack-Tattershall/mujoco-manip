@@ -54,13 +54,14 @@ def _load_scene(
             hand = spec.body("hand")
             cam = hand.add_camera()
             cam.name = "wrist"
-            cam.pos = [0.0, 0.0, 0.04]
+            cam.pos = [-0.07, 0.0, 0.055]
             cam.quat = [
-                0.0,
-                0.0,
-                1.0,
-                0.0,
-            ]  # 180° around y so camera looks along hand +z (downward)
+                -0.0616,
+                -0.7044,
+                0.7044,
+                0.0616,
+            ]
+            cam.fovy = 128.0
             return spec.compile()
         else:
             return mujoco.MjModel.from_xml_path(tmp_path)

@@ -75,7 +75,7 @@ def main() -> None:
     is_relative: bool = args.action_key.endswith("_rel")
     is_pos_rot6d_g: bool = "pos_rot6d_g" in args.action_key
 
-    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=False)
+    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=True)
     robot = PandaRobot(env.model, env.data)
     controller = IKController(env.model, env.data, robot)
 
