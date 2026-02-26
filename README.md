@@ -60,6 +60,11 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-cross num_epis
 
 # Randomize object positions each episode (seeded for reproducibility)
 uv run python scripts/generate_dataset.py repo_id=user/pick-place-rand num_episodes=100 randomize_objects=true seed=42
+
+# Single fixed task (e.g. red cube → red bin) with randomization
+uv run python scripts/generate_dataset.py \
+    repo_id=user/pick-place-simple-rand num_episodes=1000 \
+    tasks='[["obj_red","bin_red"]]' randomize_objects=true seed=42
 ```
 
 ## Visualise a dataset
