@@ -3,6 +3,7 @@ num_episodes: 100
 root: ./datasets
 task: null  # single task, e.g. [obj_red, bin_red] — overrides tasks
 tasks: all
+reward_type: staged
 randomize_objects: false
 seed: 0
 spawn_x_range: [-0.20, 0.20]
@@ -27,6 +28,7 @@ features:  # null for all, or a subset of these keys
   - observation.target_obj_keypoints_overhead
   - observation.target_bin_keypoints_overhead
   - observation.phase_description
+  - next.reward
 
 hydra:
   job:

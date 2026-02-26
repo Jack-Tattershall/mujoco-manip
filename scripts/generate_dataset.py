@@ -144,6 +144,7 @@ def run_episode(
     obj_name: str,
     bin_name: str,
     feature_keys: set[str],
+    reward_type: str = "staged",
     rng: np.random.Generator | None = None,
     randomize_kwargs: dict | None = None,
 ) -> list[dict]:
@@ -200,16 +201,22 @@ def run_episode(
     need_bin_onehot = "observation.target_bin_onehot" in feature_keys
     need_obj_onehot = "observation.target_obj_onehot" in feature_keys
     need_phase_desc = "observation.phase_description" in feature_keys
+    need_reward = "next.reward" in feature_keys and reward_type == "staged"
 
     # Capture initial EE SE(3) and its inverse (needed for actions and relative states)
-    need_initial_se3 = need_actions or (
-        need_state
-        and feature_keys
-        & {
-            "observation.state.ee.pos_quat_g_rel",
-            "observation.state.ee.pos_rot6d_g_rel",
-        }
+    need_initial_se3 = (
+        need_actions
+        or need_reward
+        or (
+            need_state
+            and feature_keys
+            & {
+                "observation.state.ee.pos_quat_g_rel",
+                "observation.state.ee.pos_rot6d_g_rel",
+            }
+        )
     )
+    initial_se3 = None
     initial_se3_inv = None
     if need_initial_se3:
         initial_se3 = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
@@ -222,6 +229,14 @@ def run_episode(
     task_str = make_task_string(obj_name, bin_name)
     bin_onehot = get_bin_onehot(bin_name) if need_bin_onehot else None
     obj_onehot = get_obj_onehot(obj_name) if need_obj_onehot else None
+
+    # Staged reward state
+    if need_reward:
+        has_grasped = False
+        has_lifted = False
+        above_target = False
+        has_placed = False
+        reward_hwm = None
 
     while not task.is_done:
         task.update()
@@ -338,6 +353,74 @@ def run_episode(
             if need_obj_onehot:
                 frame["observation.target_obj_onehot"] = obj_onehot.copy()
 
+            # Staged reward (5 phases with high-water marks)
+            if need_reward:
+                D_MAX = 0.5
+                GRASP_Z = 0.35
+                LIFT_Z = 0.42
+                obj_pos = env.get_body_pos(obj_name)
+                bin_pos = env.get_body_pos(bin_name)
+                ee_pos = robot.ee_pos
+                gripper_closed = robot.gripper_ctrl == PandaRobot.GRIPPER_CLOSED
+
+                if not has_grasped and obj_pos[2] > GRASP_Z and gripper_closed:
+                    has_grasped = True
+                if not has_lifted and obj_pos[2] > LIFT_Z and gripper_closed:
+                    has_lifted = True
+                xy_dist = np.linalg.norm(obj_pos[:2] - bin_pos[:2])
+                if not above_target and has_lifted and xy_dist < 0.06:
+                    above_target = True
+                placed = xy_dist < 0.05 and obj_pos[2] < bin_pos[2] + 0.06
+                if not has_placed and placed:
+                    has_placed = True
+
+                # Phase 1: reach object
+                if has_grasped:
+                    r0 = 1.0
+                else:
+                    r0 = 1.0 - min(np.linalg.norm(ee_pos - obj_pos) / D_MAX, 1.0)
+
+                # Phase 2: pick object
+                if not has_grasped:
+                    r1 = 0.0
+                elif has_lifted:
+                    r1 = 1.0
+                else:
+                    r1 = max(0.0, min((obj_pos[2] - 0.30) / (LIFT_Z - 0.30), 1.0))
+
+                # Phase 3: reach target
+                if not has_lifted:
+                    r2 = 0.0
+                elif above_target:
+                    r2 = 1.0
+                else:
+                    r2 = 1.0 - min(xy_dist / D_MAX, 1.0)
+
+                # Phase 4: place object
+                if not above_target:
+                    r3 = 0.0
+                elif has_placed:
+                    r3 = 1.0
+                else:
+                    height_above = obj_pos[2] - bin_pos[2]
+                    r3 = 1.0 - max(0.0, min(height_above / 0.25, 1.0))
+
+                # Phase 5: reach home
+                if not has_placed:
+                    r4 = 0.0
+                else:
+                    init_ee_pos = initial_se3[:3, 3]
+                    r4 = 1.0 - min(np.linalg.norm(ee_pos - init_ee_pos) / D_MAX, 1.0)
+
+                components = np.array([r0, r1, r2, r3, r4])
+                if reward_hwm is None:
+                    reward_hwm = np.zeros_like(components)
+                reward_hwm = np.maximum(reward_hwm, components)
+                normed = reward_hwm / len(reward_hwm)
+                frame["next.reward"] = np.array(
+                    [normed.sum(), *normed], dtype=np.float32
+                )
+
             frames.append(frame)
 
     return frames
@@ -371,6 +454,9 @@ def main(cfg: DictConfig) -> None:
                 f"Unknown feature keys: {unknown}. Valid keys: {list(FEATURES.keys())}"
             )
         features = {k: FEATURES[k] for k in requested}
+    # next.reward only supported for staged reward
+    if cfg.reward_type != "staged":
+        features.pop("next.reward", None)
     feature_keys = set(features)
 
     # Import LeRobot (handle both old and new import paths)
@@ -439,6 +525,7 @@ def main(cfg: DictConfig) -> None:
             obj_name,
             bin_name,
             feature_keys,
+            reward_type=cfg.reward_type,
             rng=rng,
             randomize_kwargs=randomize_kwargs,
         )

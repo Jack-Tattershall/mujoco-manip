@@ -83,7 +83,7 @@ class PickPlaceGymEnv(gym.Env):
                 ``(obj, bin)`` tuples. Ignored when *task* is set.
             action_mode: One of ``"abs_pos"``, ``"ee_pos_quat_g"``, ``"ee_pos_rot6d_g"``,
                 ``"ee_pos_quat_g_rel"``, ``"ee_pos_rot6d_g_rel"``.
-            reward_type: ``"dense"`` or ``"sparse"``.
+            reward_type: ``"dense"``, ``"sparse"``, or ``"staged"``.
             image_size: Resolution for camera rendering.
             render_mode: Gymnasium render mode.
             max_episode_steps: Truncation limit.
@@ -124,6 +124,44 @@ class PickPlaceGymEnv(gym.Env):
         self._initial_ee_se3: np.ndarray | None = None
         self._target_obj_kp_overhead: np.ndarray | None = None
         self._target_bin_kp_overhead: np.ndarray | None = None
+
+        # Staged reward state (only used when reward_type == "staged")
+        self._has_grasped = False
+        self._has_lifted = False
+        self._above_target = False
+        self._has_placed = False
+        self._reward_hwm: np.ndarray | None = None
+        self._robot_geom_ids: set[int] = set()
+        self._obstacle_geom_ids: set[int] = set()
+
+        if reward_type == "staged":
+            robot_bodies = {
+                "link0",
+                "link1",
+                "link2",
+                "link3",
+                "link4",
+                "link5",
+                "link6",
+                "link7",
+                "hand",
+                "left_finger",
+                "right_finger",
+            }
+            object_bodies = {"obj_red", "obj_green", "obj_blue"}
+            for i in range(self._env.model.ngeom):
+                body_id = self._env.model.geom_bodyid[i]
+                body_name = mujoco.mj_id2name(
+                    self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
+                )
+                if body_name in robot_bodies:
+                    self._robot_geom_ids.add(i)
+                elif (
+                    body_name
+                    and body_name != "world"
+                    and body_name not in object_bodies
+                ):
+                    self._obstacle_geom_ids.add(i)
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -279,6 +317,101 @@ class PickPlaceGymEnv(gym.Env):
             "target_bin_keypoints_overhead": self._target_bin_kp_overhead,
         }
 
+    def _check_robot_collision(self) -> bool:
+        """Check if any robot geom is in contact with an obstacle geom."""
+        for i in range(self._env.data.ncon):
+            c = self._env.data.contact[i]
+            g1, g2 = c.geom1, c.geom2
+            if (g1 in self._robot_geom_ids and g2 in self._obstacle_geom_ids) or (
+                g2 in self._robot_geom_ids and g1 in self._obstacle_geom_ids
+            ):
+                return True
+        return False
+
+    def _compute_staged_reward(self) -> tuple[float, bool]:
+        """Compute staged reward with five sequential phases.
+
+        Phases: reach_object → pick_object → reach_target → place_object →
+        reach_home.  Each contributes [0, 0.2] for a total range of [0, 1].
+        High-water marks ensure the total is strictly monotonic.
+
+        Returns:
+            Tuple of (reward, terminated). Returns -1.0 with
+            terminated=True on robot-obstacle collision.
+        """
+        D_MAX = 0.5
+        GRASP_Z = 0.35
+        LIFT_Z = 0.42
+
+        obj_pos = self._env.get_body_pos(self._obj_name)
+        bin_pos = self._env.get_body_pos(self._bin_name)
+        ee_pos = self._robot.ee_pos
+        gripper_closed = self._robot.gripper_ctrl == PandaRobot.GRIPPER_CLOSED
+
+        # --- Sticky phase transitions ---
+        if not self._has_grasped and obj_pos[2] > GRASP_Z and gripper_closed:
+            self._has_grasped = True
+        if not self._has_lifted and obj_pos[2] > LIFT_Z and gripper_closed:
+            self._has_lifted = True
+        xy_dist = np.linalg.norm(obj_pos[:2] - bin_pos[:2])
+        if not self._above_target and self._has_lifted and xy_dist < 0.06:
+            self._above_target = True
+        placed = xy_dist < 0.05 and obj_pos[2] < bin_pos[2] + 0.06
+        if not self._has_placed and placed:
+            self._has_placed = True
+
+        # --- Phase 1: reach object ---
+        if self._has_grasped:
+            r0 = 1.0
+        else:
+            r0 = 1.0 - min(np.linalg.norm(ee_pos - obj_pos) / D_MAX, 1.0)
+
+        # --- Phase 2: pick object (lift from grasp height to transit) ---
+        if not self._has_grasped:
+            r1 = 0.0
+        elif self._has_lifted:
+            r1 = 1.0
+        else:
+            r1 = max(0.0, min((obj_pos[2] - 0.30) / (LIFT_Z - 0.30), 1.0))
+
+        # --- Phase 3: reach target (move object above bin XY) ---
+        if not self._has_lifted:
+            r2 = 0.0
+        elif self._above_target:
+            r2 = 1.0
+        else:
+            r2 = 1.0 - min(xy_dist / D_MAX, 1.0)
+
+        # --- Phase 4: place object (lower into bin) ---
+        if not self._above_target:
+            r3 = 0.0
+        elif self._has_placed:
+            r3 = 1.0
+        else:
+            height_above = obj_pos[2] - bin_pos[2]
+            r3 = 1.0 - max(0.0, min(height_above / 0.25, 1.0))
+
+        # --- Phase 5: reach home ---
+        if not self._has_placed:
+            r4 = 0.0
+        else:
+            init_ee_pos = self._initial_ee_se3[:3, 3]
+            r4 = 1.0 - min(np.linalg.norm(ee_pos - init_ee_pos) / D_MAX, 1.0)
+
+        # High-water marks → guarantees monotonicity
+        components = np.array([r0, r1, r2, r3, r4])
+        if self._reward_hwm is None:
+            self._reward_hwm = np.zeros_like(components)
+        self._reward_hwm = np.maximum(self._reward_hwm, components)
+
+        # Collision check
+        if self._check_robot_collision():
+            return -1.0, True
+
+        reward = float(self._reward_hwm.mean())
+        done = bool(np.all(self._reward_hwm >= 1.0))
+        return reward, done
+
     def _compute_reward(self) -> tuple[float, bool]:
         """Compute reward and check for success.
 
@@ -295,6 +428,9 @@ class PickPlaceGymEnv(gym.Env):
 
         if self._reward_type == "sparse":
             return (1.0 if success else 0.0), success
+
+        if self._reward_type == "staged":
+            return self._compute_staged_reward()
 
         # Dense reward
         reward = 0.0
@@ -337,6 +473,12 @@ class PickPlaceGymEnv(gym.Env):
             )
 
         self._capture_initial_pose()
+
+        self._has_grasped = False
+        self._has_lifted = False
+        self._above_target = False
+        self._has_placed = False
+        self._reward_hwm = None
 
         if self._fixed_task is not None:
             self._obj_name, self._bin_name = self._fixed_task
@@ -389,11 +531,16 @@ class PickPlaceGymEnv(gym.Env):
 
         self._step_count += 1
         reward, success = self._compute_reward()
-        terminated = success
+        if self._reward_type == "staged":
+            # collision (reward < 0) is not success; otherwise use the done flag
+            terminated = reward < 0 or success
+            info = {"success": success and reward >= 0}
+        else:
+            terminated = success
+            info = {"success": success}
         truncated = self._step_count >= self._max_episode_steps
 
         obs = self._get_obs()
-        info = {"success": success}
 
         return obs, reward, terminated, truncated, info
 

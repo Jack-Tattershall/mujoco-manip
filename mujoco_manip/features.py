@@ -98,6 +98,11 @@ FEATURES = {
         "shape": (1,),
         "names": None,
     },
+    "next.reward": {
+        "dtype": "float32",
+        "shape": (6,),
+        "names": None,
+    },
 }
 
 DIM_NAMES: dict[str, list[str]] = {
@@ -220,4 +225,12 @@ DIM_NAMES: dict[str, list[str]] = {
     ],
     "observation.target_obj_keypoints_overhead": ["u", "v"],
     "observation.target_bin_keypoints_overhead": ["u", "v"],
+    "next.reward": [
+        "total",
+        "reach_obj",
+        "pick_obj",
+        "reach_target",
+        "place_obj",
+        "reach_home",
+    ],
 }

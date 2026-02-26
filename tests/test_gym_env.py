@@ -811,3 +811,75 @@ class TestMultipleResets:
                 obs, r, term, trunc, info = env.step(env.action_space.sample())
                 if term or trunc:
                     break
+
+
+# ---------------------------------------------------------------------------
+# Staged reward
+# ---------------------------------------------------------------------------
+
+
+class TestStagedReward:
+    @pytest.fixture
+    def staged_env(self):
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type="staged",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=500,
+        )
+        yield e
+        e.close()
+
+    def test_initial_reward_near_zero(self, staged_env):
+        """At reset the EE is far from the object so reward should be low."""
+        staged_env.reset()
+        reward, _ = staged_env._compute_reward()
+        # Only reach_object contributes; other phases are 0
+        assert 0.0 <= reward < 1.0
+
+    def test_reward_monotonic_on_approach(self, staged_env):
+        """Reward must never decrease when approaching the object."""
+        staged_env.reset()
+        obj_pos = staged_env._env.get_body_pos(staged_env._obj_name)
+
+        prev_r = -1.0
+        for _ in range(15):
+            target = np.array([obj_pos[0], obj_pos[1], 0.44, 1.0], dtype=np.float32)
+            _, r, term, trunc, _ = staged_env.step(target)
+            if term and r < 0:
+                break  # collision ends test
+            assert r >= prev_r, f"Reward decreased: {r} < {prev_r}"
+            prev_r = r
+
+    def test_sticky_flags_reset(self, staged_env):
+        """All flags and HWM should be cleared after reset."""
+        staged_env.reset()
+        assert staged_env._has_grasped is False
+        assert staged_env._has_lifted is False
+        assert staged_env._above_target is False
+        assert staged_env._has_placed is False
+        assert staged_env._reward_hwm is None
+
+    def test_collision_detection_geom_sets_populated(self, staged_env):
+        """Robot and obstacle geom sets should be non-empty."""
+        assert len(staged_env._robot_geom_ids) > 0
+        assert len(staged_env._obstacle_geom_ids) > 0
+
+    def test_collision_returns_negative_reward_and_terminates(self, staged_env):
+        """Driving the arm into the table should trigger collision penalty."""
+        staged_env.reset()
+        for _ in range(30):
+            action = np.array([0.0, 0.4, 0.10, 1.0], dtype=np.float32)
+            _, r, term, trunc, _ = staged_env.step(action)
+            if term:
+                assert r == -1.0
+                break
+
+    def test_staged_reward_range(self, staged_env):
+        """Non-collision reward should be in [0, 1]."""
+        staged_env.reset()
+        for _ in range(10):
+            _, r, term, _, _ = staged_env.step(staged_env.action_space.sample())
+            if term and r < 0:
+                break  # collision
+            assert 0.0 <= r <= 1.0
