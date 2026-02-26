@@ -7,6 +7,8 @@ randomize_objects: false
 seed: 0
 spawn_x_range: [-0.20, 0.20]
 spawn_y_range: [0.30, 0.45]
+push_to_hub: false  # push to HF Hub after generation (tags v3.0 automatically)
+private: true  # create private HF repo when pushing
 features:  # null for all, or a subset of these keys
   - observation.images.overhead
   - observation.images.wrist

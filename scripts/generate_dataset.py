@@ -477,6 +477,12 @@ def main(cfg: DictConfig) -> None:
     print(f"\nDataset saved to {dataset_path}")
     print(f"Total episodes: {cfg.num_episodes}")
 
+    # Push to HF Hub (creates dataset card + v3.0 tag automatically)
+    if cfg.push_to_hub:
+        print(f"\nPushing to HF Hub: {cfg.repo_id} (private={cfg.private})...")
+        dataset.push_to_hub(private=cfg.private, upload_large_folder=True)
+        print("Push complete.")
+
 
 if __name__ == "__main__":
     main()
