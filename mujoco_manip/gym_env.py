@@ -397,7 +397,7 @@ class PickPlaceGymEnv(gym.Env):
             return -1.0, True
 
         reward = float(self._reward_hwm.mean())
-        done = bool(np.all(self._reward_hwm >= 1.0))
+        done = bool(np.all(self._reward_hwm >= 0.90))
         return reward, done
 
     def _compute_reward(self) -> tuple[float, bool]:
