@@ -62,9 +62,7 @@ uv run python scripts/generate_dataset.py repo_id=user/pick-place-cross num_epis
 uv run python scripts/generate_dataset.py repo_id=user/pick-place-rand num_episodes=100 randomize_objects=true seed=42
 
 # Single fixed task (e.g. red cube → red bin) with randomization
-uv run python scripts/generate_dataset.py \
-    repo_id=user/pick-place-simple-rand num_episodes=1000 \
-    tasks='[["obj_red","bin_red"]]' randomize_objects=true seed=42
+uv run python scripts/generate_dataset.py repo_id=user/pick-place-simple-rand num_episodes=1000 tasks='[["obj_red","bin_red"]]' randomize_objects=true seed=42
 ```
 
 ## Visualise a dataset
@@ -87,8 +85,7 @@ Feeds recorded dataset actions back through IK in the MuJoCo viewer to verify th
 uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-index 0
 
 # Replay relative actions (reconstructed via T_initial)
-uv run python scripts/replay_actions.py \
-    --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g_rel
+uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-index 0 --action-key action.ee.pos_quat_g_rel
 
 # Slow motion (2x slower)
 uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-index 0 --slow 2
