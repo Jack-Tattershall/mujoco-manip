@@ -107,6 +107,9 @@ uv run python main.py --randomize --seed 42
 ```bash
 uv run hf login
 uv run hf upload user/pick-place ./datasets/user/pick-place --repo-type dataset --private
+
+# For large datasets, use upload-large-folder to avoid timeouts
+uv run hf upload-large-folder user/pick-place ./datasets/user/pick-place --repo-type dataset --private
 ```
 
 ## Run tests
