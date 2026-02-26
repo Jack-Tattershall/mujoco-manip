@@ -103,8 +103,8 @@ uv run python main.py --randomize --seed 42
 ## Push a dataset to Hugging Face
 
 ```bash
-uv run huggingface-cli login
-uv run huggingface-cli upload user/pick-place ./datasets/user/pick-place --repo-type dataset --private
+uv run hf login
+uv run hf upload user/pick-place ./datasets/user/pick-place --repo-type dataset --private
 ```
 
 ## Run tests
