@@ -192,7 +192,7 @@ class TestReset:
 
     def test_reset_captures_initial_pose(self, env):
         env.reset()
-        T = env._initial_ee_se3
+        T = env.initial_ee_se3
         assert T is not None
         assert T.shape == (4, 4)
         # Should be a valid SE(3): bottom row is [0, 0, 0, 1]
@@ -200,7 +200,7 @@ class TestReset:
 
     def test_initial_pose_rotation_is_orthogonal(self, env):
         env.reset()
-        R = env._initial_ee_se3[:3, :3]
+        R = env.initial_ee_se3[:3, :3]
         np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-6)
 
     def test_reset_deterministic_with_seed(self, env):
@@ -238,11 +238,11 @@ class TestStep:
 
     def test_step_increments_count(self, env):
         env.reset()
-        assert env._step_count == 0
+        assert env.step_count == 0
         env.step(env.action_space.sample())
-        assert env._step_count == 1
+        assert env.step_count == 1
         env.step(env.action_space.sample())
-        assert env._step_count == 2
+        assert env.step_count == 2
 
     def test_info_has_success_key(self, env):
         env.reset()
@@ -302,7 +302,7 @@ class TestKnownDisplacement:
 
     def test_pos_quat_g_rel_translation_moves_ee(self, env_pos_quat_g_rel):
         obs, _ = env_pos_quat_g_rel.reset()
-        T_init = env_pos_quat_g_rel._initial_ee_se3.copy()
+        T_init = env_pos_quat_g_rel.initial_ee_se3.copy()
 
         # Command: move 0.1m along the initial frame's x-axis, identity rotation, gripper open
         dx_initial = np.array([0.1, 0.0, 0.0])
@@ -322,7 +322,7 @@ class TestKnownDisplacement:
 
     def test_pos_rot6d_g_rel_translation_moves_ee(self, env_pos_rot6d_g_rel):
         obs, _ = env_pos_rot6d_g_rel.reset()
-        T_init = env_pos_rot6d_g_rel._initial_ee_se3.copy()
+        T_init = env_pos_rot6d_g_rel.initial_ee_se3.copy()
 
         dx_initial = np.array([0.1, 0.0, 0.0])
         d6 = rotmat_to_6d(np.eye(3))
@@ -365,20 +365,20 @@ class TestGripperControl:
 
     def test_gripper_opens(self, env):
         env.reset()
-        env.step(self._make_open_action(env._action_mode))
-        assert env._robot.gripper_ctrl == 255.0  # PandaRobot.GRIPPER_OPEN
+        env.step(self._make_open_action(env.action_mode))
+        assert env.robot.gripper_ctrl == 255.0  # PandaRobot.GRIPPER_OPEN
 
     def test_gripper_closes(self, env):
         env.reset()
-        env.step(self._make_close_action(env._action_mode))
-        assert env._robot.gripper_ctrl == 0.0  # PandaRobot.GRIPPER_CLOSED
+        env.step(self._make_close_action(env.action_mode))
+        assert env.robot.gripper_ctrl == 0.0  # PandaRobot.GRIPPER_CLOSED
 
     def test_gripper_reflected_in_state(self, env):
         env.reset()
-        obs_open, *_ = env.step(self._make_open_action(env._action_mode))
+        obs_open, *_ = env.step(self._make_open_action(env.action_mode))
         gripper_norm_open = obs_open["state"][3]
 
-        obs_close, *_ = env.step(self._make_close_action(env._action_mode))
+        obs_close, *_ = env.step(self._make_close_action(env.action_mode))
         gripper_norm_close = obs_close["state"][3]
 
         assert gripper_norm_open > gripper_norm_close
@@ -512,7 +512,7 @@ class TestTaskSelection:
         try:
             for _ in range(10):
                 e.reset()
-                assert (e._obj_name, e._bin_name) in custom
+                assert (e.obj_name, e.bin_name) in custom
         finally:
             e.close()
 
@@ -537,29 +537,29 @@ class TestRender:
 
 
 class TestRelativePoseMath:
-    """Verify the internal _relative_action_to_world_pos method."""
+    """Verify the decode_action method."""
 
     def test_identity_maps_to_initial_pos_pos_quat_g_rel(self, env_pos_quat_g_rel):
         env_pos_quat_g_rel.reset()
-        initial_pos = env_pos_quat_g_rel._robot.ee_pos.copy()
+        initial_pos = env_pos_quat_g_rel.robot.ee_pos.copy()
         identity = np.array([0, 0, 0, 0, 0, 0, 1, 1.0], dtype=np.float32)
-        world_pos, gripper = env_pos_quat_g_rel._relative_action_to_world_pos(identity)
+        world_pos, gripper = env_pos_quat_g_rel.decode_action(identity)
         np.testing.assert_allclose(world_pos, initial_pos, atol=1e-6)
         assert gripper == 1.0
 
     def test_identity_maps_to_initial_pos_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
         env_pos_rot6d_g_rel.reset()
-        initial_pos = env_pos_rot6d_g_rel._robot.ee_pos.copy()
+        initial_pos = env_pos_rot6d_g_rel.robot.ee_pos.copy()
         d6 = rotmat_to_6d(np.eye(3))
         identity = np.array([0, 0, 0, *d6, 0.5], dtype=np.float32)
-        world_pos, gripper = env_pos_rot6d_g_rel._relative_action_to_world_pos(identity)
+        world_pos, gripper = env_pos_rot6d_g_rel.decode_action(identity)
         np.testing.assert_allclose(world_pos, initial_pos, atol=1e-6)
         assert gripper == pytest.approx(0.5)
 
     def test_translation_roundtrip_pos_quat_g_rel(self, env_pos_quat_g_rel):
         """Build a relative action from a known world target, verify env recovers it."""
         env_pos_quat_g_rel.reset()
-        T_init = env_pos_quat_g_rel._initial_ee_se3.copy()
+        T_init = env_pos_quat_g_rel.initial_ee_se3.copy()
         T_init_inv = np.linalg.inv(T_init)
 
         target_world = np.array([-0.1, 0.5, 0.40])
@@ -567,12 +567,12 @@ class TestRelativePoseMath:
         T_rel = T_init_inv @ T_target
         action = se3_to_pos_quat_g(T_rel, gripper=1.0)
 
-        world_pos, _ = env_pos_quat_g_rel._relative_action_to_world_pos(action)
+        world_pos, _ = env_pos_quat_g_rel.decode_action(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
 
     def test_translation_roundtrip_pos_rot6d_g_rel(self, env_pos_rot6d_g_rel):
         env_pos_rot6d_g_rel.reset()
-        T_init = env_pos_rot6d_g_rel._initial_ee_se3.copy()
+        T_init = env_pos_rot6d_g_rel.initial_ee_se3.copy()
         T_init_inv = np.linalg.inv(T_init)
 
         target_world = np.array([0.15, 0.55, 0.35])
@@ -580,14 +580,14 @@ class TestRelativePoseMath:
         T_rel = T_init_inv @ T_target
         action = se3_to_pos_rot6d_g(T_rel, gripper=0.0)
 
-        world_pos, gripper = env_pos_rot6d_g_rel._relative_action_to_world_pos(action)
+        world_pos, gripper = env_pos_rot6d_g_rel.decode_action(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
         assert gripper == pytest.approx(0.0)
 
     def test_abs_pos_passthrough(self, env_abs):
         env_abs.reset()
         action = np.array([0.1, 0.4, 0.35, 0.8], dtype=np.float32)
-        world_pos, gripper = env_abs._relative_action_to_world_pos(action)
+        world_pos, gripper = env_abs.decode_action(action)
         np.testing.assert_array_equal(world_pos, action[:3])
         assert gripper == pytest.approx(0.8)
 
@@ -598,7 +598,7 @@ class TestRelativePoseMath:
         T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
         action = se3_to_pos_quat_g(T_target, gripper=1.0)
 
-        world_pos, gripper = env_pos_quat_g._relative_action_to_world_pos(action)
+        world_pos, gripper = env_pos_quat_g.decode_action(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
         assert gripper == pytest.approx(1.0)
 
@@ -609,7 +609,7 @@ class TestRelativePoseMath:
         T_target = pos_rotmat_to_se3(target_world, TARGET_ORI)
         action = se3_to_pos_rot6d_g(T_target, gripper=0.0)
 
-        world_pos, gripper = env_pos_rot6d_g._relative_action_to_world_pos(action)
+        world_pos, gripper = env_pos_rot6d_g.decode_action(action)
         np.testing.assert_allclose(world_pos, target_world, atol=1e-5)
         assert gripper == pytest.approx(0.0)
 
@@ -626,7 +626,7 @@ class TestAbsoluteSE3Action:
         """Sending the world-frame initial EE pose as an absolute action keeps EE still."""
         obs, _ = env_pos_quat_g.reset()
         initial_ee = obs["state"][:3].copy()
-        T_init = env_pos_quat_g._initial_ee_se3.copy()
+        T_init = env_pos_quat_g.initial_ee_se3.copy()
         action = se3_to_pos_quat_g(T_init, gripper=1.0)
 
         for _ in range(5):
@@ -642,7 +642,7 @@ class TestAbsoluteSE3Action:
         """Sending the world-frame initial EE pose as an absolute action keeps EE still."""
         obs, _ = env_pos_rot6d_g.reset()
         initial_ee = obs["state"][:3].copy()
-        T_init = env_pos_rot6d_g._initial_ee_se3.copy()
+        T_init = env_pos_rot6d_g.initial_ee_se3.copy()
         action = se3_to_pos_rot6d_g(T_init, gripper=1.0)
 
         for _ in range(5):
@@ -790,16 +790,16 @@ class TestMultipleResets:
         env.reset()
         env.step(env.action_space.sample())
         env.step(env.action_space.sample())
-        assert env._step_count == 2
+        assert env.step_count == 2
         env.reset()
-        assert env._step_count == 0
+        assert env.step_count == 0
 
     def test_reset_refreshes_initial_pose(self, env):
         env.reset()
-        T1 = env._initial_ee_se3.copy()
+        T1 = env.initial_ee_se3.copy()
         env.step(env.action_space.sample())
         env.reset()
-        T2 = env._initial_ee_se3.copy()
+        T2 = env.initial_ee_se3.copy()
         # After reset both should be the same home-config pose
         np.testing.assert_allclose(T1, T2, atol=1e-6)
 
@@ -840,7 +840,7 @@ class TestStagedReward:
     def test_reward_monotonic_on_approach(self, staged_env):
         """Reward must never decrease when approaching the object."""
         staged_env.reset()
-        obj_pos = staged_env._env.get_body_pos(staged_env._obj_name)
+        obj_pos = staged_env.pick_place_env.get_body_pos(staged_env.obj_name)
 
         prev_r = -1.0
         for _ in range(15):

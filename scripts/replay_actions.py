@@ -7,24 +7,10 @@ import sys
 import time
 
 import numpy as np
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
-sys.path.insert(0, _PROJECT_ROOT)
-
-from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
-
-from mujoco_manip.constants import ACTION_REPEAT  # noqa: E402
-from mujoco_manip.controller import IKController  # noqa: E402
-from mujoco_manip.env import PickPlaceEnv  # noqa: E402
-from mujoco_manip.pose_utils import (  # noqa: E402
-    pos_rotmat_to_se3,
-    se3_from_pos_quat_g,
-    se3_from_pos_rot6d_g,
-)
-from mujoco_manip.robot import PandaRobot  # noqa: E402
-
-SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
+from mujoco_manip.constants import ACTION_REPEAT, TASK_SETS
+from mujoco_manip.gym_env import PickPlaceGymEnv
 
 
 def main() -> None:
@@ -72,71 +58,88 @@ def main() -> None:
         print(f"Error: '{args.action_key}' not found. Available: {available}")
         sys.exit(1)
 
-    is_relative: bool = args.action_key.endswith("_rel")
-    is_pos_rot6d_g: bool = "pos_rot6d_g" in args.action_key
+    # Derive action_mode from the action key
+    # "action.ee.pos_quat_g" → "ee_pos_quat_g"
+    action_mode = args.action_key.replace("action.", "").replace(".", "_")
 
-    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=True)
-    robot = PandaRobot(env.model, env.data)
-    controller = IKController(env.model, env.data, robot)
-
-    env.launch_viewer()
-    env.reset_to_keyframe("scene_start")
-
-    # Restore object randomization from generation metadata if available
+    # Read generation metadata to restore randomization and task
     metadata_path = os.path.join(dataset_root, "metadata.json")
+    has_randomization = False
+    spawn_x_range = (-0.20, 0.20)
+    spawn_y_range = (0.30, 0.45)
+    episode_seed: int | None = None
+    task: tuple[str, str] | None = None
+
     if os.path.exists(metadata_path):
         with open(metadata_path) as f:
             metadata = json.load(f)
+
+        # Restore randomization settings
         episode_seeds = metadata.get("episode_seeds")
         if episode_seeds and args.episode_index < len(episode_seeds):
-            rng = np.random.default_rng(episode_seeds[args.episode_index])
-            rand_kwargs = {}
-            if "spawn_x_range" in metadata:
-                rand_kwargs["x_range"] = tuple(metadata["spawn_x_range"])
-            if "spawn_y_range" in metadata:
-                rand_kwargs["y_range"] = tuple(metadata["spawn_y_range"])
-            env.randomize_objects(rng, **rand_kwargs)
-            print(f"Restored object randomization for episode {args.episode_index}")
+            has_randomization = True
+            episode_seed = episode_seeds[args.episode_index]
+        if "spawn_x_range" in metadata:
+            spawn_x_range = tuple(metadata["spawn_x_range"])
+        if "spawn_y_range" in metadata:
+            spawn_y_range = tuple(metadata["spawn_y_range"])
 
-    T_initial: np.ndarray | None = None
-    if is_relative:
-        T_initial = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
-        print(f"T_initial position: {T_initial[:3, 3]}")
+        # Reconstruct task from metadata
+        meta_task = metadata.get("task")
+        meta_tasks = metadata.get("tasks", "all")
+        if meta_task is not None:
+            task_list = [tuple(meta_task)]
+        elif meta_tasks in TASK_SETS:
+            task_list = TASK_SETS[meta_tasks]
+        else:
+            task_list = TASK_SETS["all"]
+        task = task_list[args.episode_index % len(task_list)]
 
-    step_time: float = env.model.opt.timestep * ACTION_REPEAT * args.slow
+    # Create gym env with human render mode
+    gym_env = PickPlaceGymEnv(
+        action_mode=action_mode,
+        render_mode="human",
+        reward_type="staged",
+        randomize_objects=has_randomization,
+        spawn_x_range=spawn_x_range,
+        spawn_y_range=spawn_y_range,
+    )
+
+    reset_kwargs: dict = {}
+    if episode_seed is not None:
+        reset_kwargs["seed"] = episode_seed
+    if task is not None:
+        reset_kwargs["options"] = {"task": task}
+    obs, info = gym_env.reset(**reset_kwargs)
+
+    if has_randomization:
+        print(f"Restored object randomization for episode {args.episode_index}")
+    if task is not None:
+        print(f"Task: {task[0]} → {task[1]}")
+
+    step_time: float = (
+        gym_env.pick_place_env.model.opt.timestep * ACTION_REPEAT * args.slow
+    )
 
     print(f"\nReplaying {num_frames} frames (ACTION_REPEAT={ACTION_REPEAT})...")
     print(f"{'Frame':>6}  {'Action XYZ':>30}  {'EE XYZ':>30}  {'Error':>8}")
     print("-" * 82)
 
     for i in range(num_frames):
-        if not env.is_running():
+        if not gym_env.pick_place_env.is_running():
             print("\nViewer closed.")
             break
 
         frame = dataset[i]
         action = frame[args.action_key].numpy()
 
-        if is_relative:
-            if is_pos_rot6d_g:
-                T_abs = T_initial @ se3_from_pos_rot6d_g(action)
-            else:
-                T_abs = T_initial @ se3_from_pos_quat_g(action)
-            target_xyz = T_abs[:3, 3]
-        else:
-            target_xyz = action[:3]
-
-        gripper_val: float = action[-1]
-        robot.data.ctrl[7] = gripper_val * 255
-
         t_start: float = time.monotonic()
-        for _ in range(ACTION_REPEAT):
-            q_target = controller.compute(target_xyz)
-            robot.set_arm_ctrl(q_target)
-            env.step()
-        env.sync()
+        obs, reward, terminated, truncated, info = gym_env.step(action)
+        gym_env.render()
 
-        ee_pos: np.ndarray = robot.ee_pos
+        # Compute target position for error reporting
+        target_xyz, _ = gym_env.decode_action(action)
+        ee_pos: np.ndarray = gym_env.robot.ee_pos
         err: float = float(np.linalg.norm(ee_pos - target_xyz))
         print(
             f"{i:>6}  {target_xyz[0]:>9.4f} {target_xyz[1]:>9.4f} {target_xyz[2]:>9.4f}"
@@ -150,9 +153,11 @@ def main() -> None:
             time.sleep(sleep_time)
 
     print("\nReplay finished. Viewer remains open — close window to exit.")
-    while env.is_running():
-        env.sync()
+    while gym_env.pick_place_env.is_running():
+        gym_env.pick_place_env.sync()
         time.sleep(0.05)
+
+    gym_env.close()
 
 
 if __name__ == "__main__":

@@ -1,41 +1,41 @@
 """Generate a LeRobot v3.0 dataset from expert FSM demonstrations."""
 
 import json
-import os
-import sys
 from pathlib import Path
 
 import hydra
-import mujoco
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
-# Add project root to path
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
-sys.path.insert(0, _PROJECT_ROOT)
-
-from mujoco_manip.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d  # noqa: E402
-from mujoco_manip.constants import (  # noqa: E402
+from mujoco_manip.constants import (
     ACTION_REPEAT,
-    BINS,
     CONTROL_FPS,
-    IMAGE_SIZE,
-    OBJECTS,
     TASK_SETS,
 )
-from mujoco_manip.controller import IKController, TARGET_ORI  # noqa: E402
-from mujoco_manip.env import PickPlaceEnv  # noqa: E402
-from mujoco_manip.features import FEATURES  # noqa: E402
-from mujoco_manip.pick_and_place import PickAndPlaceTask  # noqa: E402
-from mujoco_manip.pose_utils import (  # noqa: E402
+from mujoco_manip.controller import TARGET_ORI
+from mujoco_manip.features import FEATURES
+from mujoco_manip.gym_env import PickPlaceGymEnv
+from mujoco_manip.pick_and_place import PickAndPlaceTask
+from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     se3_to_pos_quat_g,
     se3_to_pos_rot6d_g,
 )
-from mujoco_manip.robot import PandaRobot  # noqa: E402
 
-SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
+# Map gym obs keys → dataset feature keys
+_OBS_TO_FEATURE = {
+    "image_overhead": "observation.images.overhead",
+    "image_wrist": "observation.images.wrist",
+    "state": "observation.state",
+    "state.ee.pos_quat_g": "observation.state.ee.pos_quat_g",
+    "state.ee.pos_rot6d_g": "observation.state.ee.pos_rot6d_g",
+    "state.ee.pos_quat_g_rel": "observation.state.ee.pos_quat_g_rel",
+    "state.ee.pos_rot6d_g_rel": "observation.state.ee.pos_rot6d_g_rel",
+    "target_bin_onehot": "observation.target_bin_onehot",
+    "target_obj_onehot": "observation.target_obj_onehot",
+    "target_obj_keypoints_overhead": "observation.target_obj_keypoints_overhead",
+    "target_bin_keypoints_overhead": "observation.target_bin_keypoints_overhead",
+}
 
 
 def make_task_string(obj_name: str, bin_name: str) -> str:
@@ -53,142 +53,70 @@ def make_task_string(obj_name: str, bin_name: str) -> str:
     return f"Pick {obj_color} object and place in {bin_color} bin"
 
 
-def get_state(robot: PandaRobot) -> np.ndarray:
-    """Build the state vector [ee_xyz(3), gripper_norm(1), arm_qpos(7)].
-
-    Args:
-        robot: Robot interface.
-
-    Returns:
-        State array (11,), dtype float32.
-    """
-    gripper_norm = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
-    return np.concatenate(
-        [
-            robot.ee_pos.astype(np.float32),
-            np.array([gripper_norm], dtype=np.float32),
-            robot.arm_qpos.astype(np.float32),
-        ]
-    )
-
-
-def get_bin_onehot(bin_name: str) -> np.ndarray:
-    """Return one-hot encoding (3,) for the target bin.
-
-    Args:
-        bin_name: Bin body name (e.g. ``"bin_red"``).
-
-    Returns:
-        One-hot array (3,), dtype float32.
-    """
-    idx = BINS.index(bin_name)
-    onehot = np.zeros(3, dtype=np.float32)
-    onehot[idx] = 1.0
-    return onehot
-
-
-def get_obj_onehot(obj_name: str) -> np.ndarray:
-    """Return one-hot encoding (3,) for the target object.
-
-    Args:
-        obj_name: Object body name (e.g. ``"obj_red"``).
-
-    Returns:
-        One-hot array (3,), dtype float32.
-    """
-    idx = OBJECTS.index(obj_name)
-    onehot = np.zeros(3, dtype=np.float32)
-    onehot[idx] = 1.0
-    return onehot
-
-
 def get_actions(
-    task: PickAndPlaceTask,
+    target_pos: np.ndarray,
+    gripper_val: float,
     initial_se3_inv: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute the FSM's commanded SE(3) in absolute and relative frames.
 
-    The FSM always commands a position target with downward orientation
-    (``TARGET_ORI``). We build the absolute target SE(3), then compute
-    ``T_rel = T_init_inv @ T_target``.
-
     Args:
-        task: Current pick-and-place task state machine.
+        target_pos: EE target position (3,) in world frame.
+        gripper_val: Gripper value (1.0 open, 0.0 closed).
         initial_se3_inv: Inverse of the initial EE SE(3) (4, 4).
 
     Returns:
-        Tuple of (action_pos_quat_g, action_pos_rot6d_g, action_pos_quat_g_rel, action_pos_rot6d_g_rel).
+        Tuple of (action_pos_quat_g, action_pos_rot6d_g,
+        action_pos_quat_g_rel, action_pos_rot6d_g_rel).
     """
-    target_pos = task._target_pos if task._target_pos is not None else task.robot.ee_pos
-    gripper = 1.0 if task.robot.gripper_ctrl == PandaRobot.GRIPPER_OPEN else 0.0
-
-    # Absolute target SE(3): commanded position + fixed downward orientation
     T_target = pos_rotmat_to_se3(target_pos, TARGET_ORI)
-
-    # Relative to initial
     T_rel = initial_se3_inv @ T_target
 
     return (
-        se3_to_pos_quat_g(T_target, gripper),
-        se3_to_pos_rot6d_g(T_target, gripper),
-        se3_to_pos_quat_g(T_rel, gripper),
-        se3_to_pos_rot6d_g(T_rel, gripper),
+        se3_to_pos_quat_g(T_target, gripper_val),
+        se3_to_pos_rot6d_g(T_target, gripper_val),
+        se3_to_pos_quat_g(T_rel, gripper_val),
+        se3_to_pos_rot6d_g(T_rel, gripper_val),
     )
 
 
 def run_episode(
-    env: PickPlaceEnv,
-    robot: PandaRobot,
-    controller: IKController,
-    renderer: CameraRenderer,
+    gym_env: PickPlaceGymEnv,
     obj_name: str,
     bin_name: str,
     feature_keys: set[str],
     reward_type: str = "staged",
-    rng: np.random.Generator | None = None,
-    randomize_kwargs: dict | None = None,
+    episode_seed: int | None = None,
 ) -> list[dict]:
-    """Run one expert FSM episode and collect frames.
+    """Run one expert FSM episode via the gym env and collect frames.
 
     Args:
-        env: MuJoCo environment wrapper.
-        robot: Robot control interface.
-        controller: IK controller.
-        renderer: Camera renderer for capturing images.
+        gym_env: Gymnasium pick-and-place environment.
         obj_name: Object body name.
         bin_name: Target bin body name.
         feature_keys: Set of feature keys to include in each frame.
-        rng: If provided, randomize object positions before the episode.
-        randomize_kwargs: Extra keyword arguments for ``env.randomize_objects``.
+        reward_type: Reward type string.
+        episode_seed: Seed for this episode's reset.
 
     Returns:
         List of frame dicts with only the requested features.
     """
-    if randomize_kwargs is None:
-        randomize_kwargs = {}
-    env.reset_to_keyframe("scene_start")
-    if rng is not None:
-        env.randomize_objects(rng, **randomize_kwargs)
+    # Reset the gym env with task override and optional seed
+    reset_kwargs: dict = {}
+    if episode_seed is not None:
+        reset_kwargs["seed"] = episode_seed
+    reset_kwargs["options"] = {"task": (obj_name, bin_name)}
+    obs, info = gym_env.reset(**reset_kwargs)
+
+    # Create FSM sharing the gym env's internals
+    fsm = PickAndPlaceTask(
+        gym_env.pick_place_env,
+        gym_env.robot,
+        gym_env.controller,
+        tasks=[(obj_name, bin_name)],
+    )
 
     # Check which feature groups are needed
-    need_images = bool(
-        feature_keys & {"observation.images.overhead", "observation.images.wrist"}
-    )
-    need_keypoints = bool(
-        feature_keys & {"observation.keypoints_overhead", "observation.keypoints_wrist"}
-    )
-    need_target_obj_kp = "observation.target_obj_keypoints_overhead" in feature_keys
-    need_target_bin_kp = "observation.target_bin_keypoints_overhead" in feature_keys
-    need_state = bool(
-        feature_keys
-        & {
-            "observation.state",
-            "observation.state.ee.pos_quat_g",
-            "observation.state.ee.pos_rot6d_g",
-            "observation.state.ee.pos_quat_g_rel",
-            "observation.state.ee.pos_rot6d_g_rel",
-        }
-    )
     need_actions = bool(
         feature_keys
         & {
@@ -198,230 +126,74 @@ def run_episode(
             "action.ee.pos_rot6d_g_rel",
         }
     )
-    need_bin_onehot = "observation.target_bin_onehot" in feature_keys
-    need_obj_onehot = "observation.target_obj_onehot" in feature_keys
     need_phase_desc = "observation.phase_description" in feature_keys
     need_reward = "next.reward" in feature_keys and reward_type == "staged"
 
-    # Capture initial EE SE(3) and its inverse (needed for actions and relative states)
-    need_initial_se3 = (
-        need_actions
-        or need_reward
-        or (
-            need_state
-            and feature_keys
-            & {
-                "observation.state.ee.pos_quat_g_rel",
-                "observation.state.ee.pos_rot6d_g_rel",
-            }
-        )
-    )
-    initial_se3 = None
+    # Initial SE(3) inverse for computing relative actions
     initial_se3_inv = None
-    if need_initial_se3:
-        initial_se3 = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
-        initial_se3_inv = np.linalg.inv(initial_se3)
+    if need_actions:
+        initial_se3_inv = np.linalg.inv(gym_env.initial_ee_se3)
 
-    task = PickAndPlaceTask(env, robot, controller, tasks=[(obj_name, bin_name)])
-
-    frames = []
-    physics_step = 0
     task_str = make_task_string(obj_name, bin_name)
-    bin_onehot = get_bin_onehot(bin_name) if need_bin_onehot else None
-    obj_onehot = get_obj_onehot(obj_name) if need_obj_onehot else None
+    frames = []
 
-    # Staged reward state
-    if need_reward:
-        has_grasped = False
-        has_lifted = False
-        above_target = False
-        has_placed = False
-        reward_hwm = None
+    while not fsm.is_done:
+        # Plan at gym-step level (ACTION_REPEAT physics steps per gym step)
+        fsm.plan(n_steps=ACTION_REPEAT)
 
-    while not task.is_done:
-        task.update()
-        env.step()
-        physics_step += 1
+        # Build abs_pos action from FSM target
+        target_pos = (
+            fsm.target_pos if fsm.target_pos is not None else gym_env.robot.ee_pos
+        )
+        action = np.array([*target_pos, fsm.gripper_val], dtype=np.float32)
 
-        # Record a frame every ACTION_REPEAT physics steps
-        if physics_step % ACTION_REPEAT == 0:
-            mujoco.mj_forward(env.model, env.data)
+        # Step the gym env
+        obs, reward, terminated, truncated, info = gym_env.step(action)
 
-            frame: dict = {"task": task_str}
+        # Build frame from gym obs
+        frame: dict = {"task": task_str}
 
-            # Images
-            if need_images:
-                if "observation.images.overhead" in feature_keys:
-                    frame["observation.images.overhead"] = renderer.render(
-                        env.data, "overhead"
-                    )
-                if "observation.images.wrist" in feature_keys:
-                    frame["observation.images.wrist"] = renderer.render(
-                        env.data, "wrist"
-                    )
+        for obs_key, feat_key in _OBS_TO_FEATURE.items():
+            if feat_key in feature_keys and obs_key in obs:
+                frame[feat_key] = obs[obs_key]
 
-            # Keypoints
-            if need_keypoints:
-                if "observation.keypoints_overhead" in feature_keys:
-                    frame["observation.keypoints_overhead"] = compute_keypoints(
-                        env.model, env.data, "overhead"
-                    ).flatten()
-                if "observation.keypoints_wrist" in feature_keys:
-                    frame["observation.keypoints_wrist"] = compute_keypoints(
-                        env.model, env.data, "wrist"
-                    ).flatten()
+        # Keypoints need flattening (gym returns (N, 2), dataset expects (14,))
+        if (
+            "observation.keypoints_overhead" in feature_keys
+            and "keypoints_overhead" in obs
+        ):
+            frame["observation.keypoints_overhead"] = obs[
+                "keypoints_overhead"
+            ].flatten()
+        if "observation.keypoints_wrist" in feature_keys and "keypoints_wrist" in obs:
+            frame["observation.keypoints_wrist"] = obs["keypoints_wrist"].flatten()
 
-            # Target keypoints (obj and bin projected separately)
-            if need_target_obj_kp:
-                obj_3d = env.data.xpos[
-                    mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, obj_name)
-                ][np.newaxis]
-                frame["observation.target_obj_keypoints_overhead"] = project_3d_to_2d(
-                    env.model, env.data, "overhead", obj_3d, IMAGE_SIZE
-                ).flatten()
-            if need_target_bin_kp:
-                bin_3d = env.data.xpos[
-                    mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, bin_name)
-                ][np.newaxis]
-                frame["observation.target_bin_keypoints_overhead"] = project_3d_to_2d(
-                    env.model, env.data, "overhead", bin_3d, IMAGE_SIZE
-                ).flatten()
+        # Action variants computed from FSM target
+        if need_actions:
+            (
+                action_pos_quat_g,
+                action_pos_rot6d_g,
+                action_pos_quat_g_rel,
+                action_pos_rot6d_g_rel,
+            ) = get_actions(target_pos, fsm.gripper_val, initial_se3_inv)
+            if "action.ee.pos_quat_g" in feature_keys:
+                frame["action.ee.pos_quat_g"] = action_pos_quat_g
+            if "action.ee.pos_rot6d_g" in feature_keys:
+                frame["action.ee.pos_rot6d_g"] = action_pos_rot6d_g
+            if "action.ee.pos_quat_g_rel" in feature_keys:
+                frame["action.ee.pos_quat_g_rel"] = action_pos_quat_g_rel
+            if "action.ee.pos_rot6d_g_rel" in feature_keys:
+                frame["action.ee.pos_rot6d_g_rel"] = action_pos_rot6d_g_rel
 
-            # State variants
-            if need_state:
-                if "observation.state" in feature_keys:
-                    frame["observation.state"] = get_state(robot)
+        # Phase description
+        if need_phase_desc:
+            frame["observation.phase_description"] = fsm.phase_description
 
-                # SE3-derived states share some computation
-                need_ee = feature_keys & {
-                    "observation.state.ee.pos_quat_g",
-                    "observation.state.ee.pos_rot6d_g",
-                    "observation.state.ee.pos_quat_g_rel",
-                    "observation.state.ee.pos_rot6d_g_rel",
-                }
-                if need_ee:
-                    T_current = pos_rotmat_to_se3(robot.ee_pos, robot.ee_xmat)
-                    gripper_val = robot.gripper_ctrl / PandaRobot.GRIPPER_OPEN
+        # Staged reward from info
+        if need_reward and "reward_components" in info:
+            frame["next.reward"] = info["reward_components"]
 
-                    if "observation.state.ee.pos_quat_g" in feature_keys:
-                        frame["observation.state.ee.pos_quat_g"] = se3_to_pos_quat_g(
-                            T_current, gripper_val
-                        )
-                    if "observation.state.ee.pos_rot6d_g" in feature_keys:
-                        frame["observation.state.ee.pos_rot6d_g"] = se3_to_pos_rot6d_g(
-                            T_current, gripper_val
-                        )
-
-                    if feature_keys & {
-                        "observation.state.ee.pos_quat_g_rel",
-                        "observation.state.ee.pos_rot6d_g_rel",
-                    }:
-                        T_rel_obs = initial_se3_inv @ T_current
-                        if "observation.state.ee.pos_quat_g_rel" in feature_keys:
-                            frame["observation.state.ee.pos_quat_g_rel"] = (
-                                se3_to_pos_quat_g(T_rel_obs, gripper_val)
-                            )
-                        if "observation.state.ee.pos_rot6d_g_rel" in feature_keys:
-                            frame["observation.state.ee.pos_rot6d_g_rel"] = (
-                                se3_to_pos_rot6d_g(T_rel_obs, gripper_val)
-                            )
-
-            # Actions
-            if need_actions:
-                (
-                    action_pos_quat_g,
-                    action_pos_rot6d_g,
-                    action_pos_quat_g_rel,
-                    action_pos_rot6d_g_rel,
-                ) = get_actions(task, initial_se3_inv)
-                if "action.ee.pos_quat_g" in feature_keys:
-                    frame["action.ee.pos_quat_g"] = action_pos_quat_g
-                if "action.ee.pos_rot6d_g" in feature_keys:
-                    frame["action.ee.pos_rot6d_g"] = action_pos_rot6d_g
-                if "action.ee.pos_quat_g_rel" in feature_keys:
-                    frame["action.ee.pos_quat_g_rel"] = action_pos_quat_g_rel
-                if "action.ee.pos_rot6d_g_rel" in feature_keys:
-                    frame["action.ee.pos_rot6d_g_rel"] = action_pos_rot6d_g_rel
-
-            # Phase description
-            if need_phase_desc:
-                frame["observation.phase_description"] = task.phase_description
-
-            # Task context
-            if need_bin_onehot:
-                frame["observation.target_bin_onehot"] = bin_onehot.copy()
-            if need_obj_onehot:
-                frame["observation.target_obj_onehot"] = obj_onehot.copy()
-
-            # Staged reward (5 phases with high-water marks)
-            if need_reward:
-                D_MAX = 0.5
-                GRASP_Z = 0.35
-                LIFT_Z = 0.42
-                obj_pos = env.get_body_pos(obj_name)
-                bin_pos = env.get_body_pos(bin_name)
-                ee_pos = robot.ee_pos
-                gripper_closed = robot.gripper_ctrl == PandaRobot.GRIPPER_CLOSED
-
-                if not has_grasped and obj_pos[2] > GRASP_Z and gripper_closed:
-                    has_grasped = True
-                if not has_lifted and obj_pos[2] > LIFT_Z and gripper_closed:
-                    has_lifted = True
-                xy_dist = np.linalg.norm(obj_pos[:2] - bin_pos[:2])
-                if not above_target and has_lifted and xy_dist < 0.06:
-                    above_target = True
-                placed = xy_dist < 0.05 and obj_pos[2] < bin_pos[2] + 0.06
-                if not has_placed and placed:
-                    has_placed = True
-
-                # Phase 1: reach object
-                if has_grasped:
-                    r0 = 1.0
-                else:
-                    r0 = 1.0 - min(np.linalg.norm(ee_pos - obj_pos) / D_MAX, 1.0)
-
-                # Phase 2: pick object
-                if not has_grasped:
-                    r1 = 0.0
-                elif has_lifted:
-                    r1 = 1.0
-                else:
-                    r1 = max(0.0, min((obj_pos[2] - 0.30) / (LIFT_Z - 0.30), 1.0))
-
-                # Phase 3: reach target
-                if not has_lifted:
-                    r2 = 0.0
-                elif above_target:
-                    r2 = 1.0
-                else:
-                    r2 = 1.0 - min(xy_dist / D_MAX, 1.0)
-
-                # Phase 4: place object
-                if not above_target:
-                    r3 = 0.0
-                elif has_placed:
-                    r3 = 1.0
-                else:
-                    height_above = obj_pos[2] - bin_pos[2]
-                    r3 = 1.0 - max(0.0, min(height_above / 0.25, 1.0))
-
-                # Phase 5: reach home
-                if not has_placed:
-                    r4 = 0.0
-                else:
-                    init_ee_pos = initial_se3[:3, 3]
-                    r4 = 1.0 - min(np.linalg.norm(ee_pos - init_ee_pos) / D_MAX, 1.0)
-
-                components = np.array([r0, r1, r2, r3, r4])
-                if reward_hwm is None:
-                    reward_hwm = np.zeros_like(components)
-                reward_hwm = np.maximum(reward_hwm, components)
-                normed = reward_hwm / len(reward_hwm)
-                frame["next.reward"] = np.array(
-                    [normed.sum(), *normed], dtype=np.float32
-                )
-
-            frames.append(frame)
+        frames.append(frame)
 
     return frames
 
@@ -465,12 +237,15 @@ def main(cfg: DictConfig) -> None:
     except ImportError:
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    # Load environment with wrist camera
+    # Create gym environment
     print("Loading scene...")
-    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=True)
-    robot = PandaRobot(env.model, env.data)
-    controller = IKController(env.model, env.data, robot)
-    renderer = CameraRenderer(env.model, IMAGE_SIZE, IMAGE_SIZE)
+    gym_env = PickPlaceGymEnv(
+        action_mode="abs_pos",
+        reward_type=cfg.reward_type,
+        randomize_objects=cfg.randomize_objects,
+        spawn_x_range=tuple(cfg.spawn_x_range),
+        spawn_y_range=tuple(cfg.spawn_y_range),
+    )
 
     # Create dataset — nest under root/repo_id so multiple datasets coexist
     dataset_path = Path(cfg.root) / cfg.repo_id
@@ -487,13 +262,10 @@ def main(cfg: DictConfig) -> None:
 
     # Per-episode seeds for object position randomization
     episode_seeds = None
-    randomize_kwargs = {}
     if cfg.randomize_objects:
         ss = np.random.SeedSequence(cfg.seed)
         child_seeds = ss.spawn(cfg.num_episodes)
         episode_seeds = [int(cs.generate_state(1)[0]) for cs in child_seeds]
-        randomize_kwargs["x_range"] = tuple(cfg.spawn_x_range)
-        randomize_kwargs["y_range"] = tuple(cfg.spawn_y_range)
 
     # Generate episodes, cycling through tasks
     task_label = str(list(cfg.task)) if cfg.task is not None else cfg.tasks
@@ -510,24 +282,15 @@ def main(cfg: DictConfig) -> None:
             flush=True,
         )
 
-        # Create a fresh RNG per episode for independent reproducibility
-        rng = (
-            np.random.default_rng(episode_seeds[ep_idx])
-            if episode_seeds is not None
-            else None
-        )
+        ep_seed = episode_seeds[ep_idx] if episode_seeds is not None else None
 
         frames = run_episode(
-            env,
-            robot,
-            controller,
-            renderer,
+            gym_env,
             obj_name,
             bin_name,
             feature_keys,
             reward_type=cfg.reward_type,
-            rng=rng,
-            randomize_kwargs=randomize_kwargs,
+            episode_seed=ep_seed,
         )
 
         for frame in frames:
@@ -560,7 +323,7 @@ def main(cfg: DictConfig) -> None:
 
     # Finalize
     dataset.finalize()
-    renderer.close()
+    gym_env.close()
     print(f"\nDataset saved to {dataset_path}")
     print(f"Total episodes: {cfg.num_episodes}")
 

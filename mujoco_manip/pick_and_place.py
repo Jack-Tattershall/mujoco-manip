@@ -102,6 +102,7 @@ class PickAndPlaceTask:
         self.settle_counter: int = 0
         self._target_pos: np.ndarray | None = None
         self._transit_end: np.ndarray | None = None
+        self._gripper_open: bool = True
 
     @property
     def is_done(self) -> bool:
@@ -112,6 +113,16 @@ class PickAndPlaceTask:
     def phase(self) -> Phase:
         """Return the current semantic phase of the FSM."""
         return _STATE_TO_PHASE[self.state]
+
+    @property
+    def target_pos(self) -> np.ndarray | None:
+        """The current EE target position (3,), or None before first plan()."""
+        return self._target_pos
+
+    @property
+    def gripper_val(self) -> float:
+        """Return 1.0 if gripper is open, 0.0 if closed."""
+        return 1.0 if self._gripper_open else 0.0
 
     @property
     def phase_description(self) -> str:
@@ -153,26 +164,34 @@ class PickAndPlaceTask:
         """Return XY position (2,) of the current bin."""
         return self.env.get_body_pos(self._bin_name())[:2]
 
-    def update(self) -> str:
-        """Advance the state machine by one tick.
+    def plan(self, n_steps: int = 1) -> str:
+        """Advance the state machine decisions without actuating the robot.
+
+        Updates state transitions, sets ``_target_pos``, tracks
+        ``_gripper_open``, decrements timers by *n_steps*, and interpolates
+        MOVE_TO_BIN by ``TRANSIT_SPEED * n_steps``. Does **not** call the
+        controller or robot.
+
+        Args:
+            n_steps: Number of physics steps to advance timers/interpolation
+                by. Use 1 for physics-step-level FSM (default, backward
+                compatible with ``main.py``) or ``ACTION_REPEAT`` for
+                gym-step-level FSM (for ``generate_dataset.py``).
 
         Returns:
             Human-readable status string.
         """
-
         if self.state == State.IDLE:
             if self.task_index >= len(self._tasks):
                 self.state = State.DONE
                 return "All objects placed!"
-            self.robot.open_gripper()
+            self._gripper_open = True
             obj_xy = self._obj_xy()
             self._target_pos = np.array([obj_xy[0], obj_xy[1], PRE_GRASP_HEIGHT])
             self.state = State.PRE_GRASP
             return f"Moving to pre-grasp above {self._obj_name()}"
 
         elif self.state == State.PRE_GRASP:
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
                 obj_xy = self._obj_xy()
                 self._target_pos = np.array([obj_xy[0], obj_xy[1], GRASP_HEIGHT])
@@ -181,20 +200,15 @@ class PickAndPlaceTask:
             return f"Approaching pre-grasp for {self._obj_name()}"
 
         elif self.state == State.GRASP:
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
-                self.robot.close_gripper()
+                self._gripper_open = False
                 self.settle_counter = GRIPPER_SETTLE_STEPS
                 self.state = State.CLOSE_GRIPPER
                 return f"Closing gripper on {self._obj_name()}"
             return f"Descending to {self._obj_name()}"
 
         elif self.state == State.CLOSE_GRIPPER:
-            # Keep arm steady while gripper closes
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
-            self.settle_counter -= 1
+            self.settle_counter -= n_steps
             if self.settle_counter <= 0:
                 obj_xy = self._obj_xy()
                 self._target_pos = np.array([obj_xy[0], obj_xy[1], LIFT_HEIGHT])
@@ -203,27 +217,22 @@ class PickAndPlaceTask:
             return f"Gripping {self._obj_name()} ({self.settle_counter})"
 
         elif self.state == State.LIFT:
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
                 bin_xy = self._bin_xy()
                 self._transit_end = np.array([bin_xy[0], bin_xy[1], TRANSIT_HEIGHT])
-                # Start target at current lift position; will be interpolated
                 self._target_pos = self._target_pos.copy()
                 self.state = State.MOVE_TO_BIN
                 return f"Moving {self._obj_name()} to {self._bin_name()}"
             return f"Lifting {self._obj_name()}"
 
         elif self.state == State.MOVE_TO_BIN:
-            # Interpolate target toward bin at capped speed
             diff = self._transit_end - self._target_pos
             dist = np.linalg.norm(diff)
-            if dist > TRANSIT_SPEED:
-                self._target_pos += diff * (TRANSIT_SPEED / dist)
+            step = TRANSIT_SPEED * n_steps
+            if dist > step:
+                self._target_pos += diff * (step / dist)
             else:
                 self._target_pos = self._transit_end.copy()
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if dist <= self.controller.pos_tolerance:
                 self.settle_counter = BIN_SETTLE_STEPS
                 self.state = State.SETTLE_AT_BIN
@@ -231,10 +240,7 @@ class PickAndPlaceTask:
             return f"Transporting {self._obj_name()}"
 
         elif self.state == State.SETTLE_AT_BIN:
-            # Hold position and let the cube stop swinging
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
-            self.settle_counter -= 1
+            self.settle_counter -= n_steps
             if self.settle_counter <= 0:
                 bin_xy = self._bin_xy()
                 self._target_pos = np.array([bin_xy[0], bin_xy[1], RELEASE_HEIGHT])
@@ -243,20 +249,15 @@ class PickAndPlaceTask:
             return f"Settling above {self._bin_name()} ({self.settle_counter})"
 
         elif self.state == State.LOWER_TO_BIN:
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
-                self.robot.open_gripper()
+                self._gripper_open = True
                 self.settle_counter = GRIPPER_SETTLE_STEPS
                 self.state = State.RELEASE
                 return f"Releasing {self._obj_name()} into {self._bin_name()}"
             return f"Lowering to {self._bin_name()}"
 
         elif self.state == State.RELEASE:
-            # Keep arm steady while gripper opens
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
-            self.settle_counter -= 1
+            self.settle_counter -= n_steps
             if self.settle_counter <= 0:
                 self._target_pos = np.array([0.0, 0.3, RETREAT_HEIGHT])
                 self.state = State.RETREAT
@@ -264,8 +265,6 @@ class PickAndPlaceTask:
             return f"Releasing ({self.settle_counter})"
 
         elif self.state == State.RETREAT:
-            q = self.controller.compute(self._target_pos)
-            self.robot.set_arm_ctrl(q)
             if self.controller.reached(self._target_pos):
                 self.task_index += 1
                 self.state = State.IDLE
@@ -276,3 +275,30 @@ class PickAndPlaceTask:
             return "All objects placed!"
 
         return ""
+
+    def _actuate(self) -> None:
+        """Send the current target to the controller and robot.
+
+        Sets gripper open/closed and computes IK for the arm.
+        """
+        if self._gripper_open:
+            self.robot.open_gripper()
+        else:
+            self.robot.close_gripper()
+
+        if self._target_pos is not None:
+            q = self.controller.compute(self._target_pos)
+            self.robot.set_arm_ctrl(q)
+
+    def update(self) -> str:
+        """Advance the state machine by one tick.
+
+        Calls ``plan(1)`` then ``_actuate()``. Backward compatible with
+        ``main.py`` and existing tests.
+
+        Returns:
+            Human-readable status string.
+        """
+        status = self.plan(1)
+        self._actuate()
+        return status

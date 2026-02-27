@@ -207,6 +207,41 @@ class PickPlaceGymEnv(gym.Env):
             }
         )
 
+    @property
+    def action_mode(self) -> str:
+        """The active action mode string."""
+        return self._action_mode
+
+    @property
+    def pick_place_env(self) -> PickPlaceEnv:
+        """The underlying MuJoCo environment wrapper."""
+        return self._env
+
+    @property
+    def robot(self) -> PandaRobot:
+        """The robot control interface."""
+        return self._robot
+
+    @property
+    def controller(self) -> IKController:
+        """The IK controller."""
+        return self._controller
+
+    @property
+    def step_count(self) -> int:
+        """Number of steps taken in the current episode."""
+        return self._step_count
+
+    @property
+    def obj_name(self) -> str:
+        """The current episode's target object body name."""
+        return self._obj_name
+
+    @property
+    def bin_name(self) -> str:
+        """The current episode's target bin body name."""
+        return self._bin_name
+
     def _capture_initial_pose(self) -> None:
         """Store the current EE SE(3) as the episode's initial pose."""
         self._initial_ee_se3 = pos_rotmat_to_se3(
@@ -214,9 +249,7 @@ class PickPlaceGymEnv(gym.Env):
             self._robot.ee_xmat,
         )
 
-    def _relative_action_to_world_pos(
-        self, action: np.ndarray
-    ) -> tuple[np.ndarray, float]:
+    def decode_action(self, action: np.ndarray) -> tuple[np.ndarray, float]:
         """Convert an action to a world-frame target position.
 
         Args:
@@ -436,6 +469,11 @@ class PickPlaceGymEnv(gym.Env):
 
         return reward, success
 
+    @property
+    def initial_ee_se3(self) -> np.ndarray:
+        """The initial EE SE(3) captured at the start of the episode (4, 4)."""
+        return self._initial_ee_se3.copy()
+
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
     ) -> tuple[dict[str, np.ndarray], dict]:
@@ -443,7 +481,9 @@ class PickPlaceGymEnv(gym.Env):
 
         Args:
             seed: Random seed for reproducibility.
-            options: Additional reset options (unused).
+            options: Additional reset options. Supports ``"task"`` key with
+                an ``(obj_name, bin_name)`` tuple to override the task for
+                this episode.
 
         Returns:
             Tuple of (obs, info).
@@ -468,7 +508,9 @@ class PickPlaceGymEnv(gym.Env):
         self._has_placed = False
         self._reward_hwm = None
 
-        if self._fixed_task is not None:
+        if options and "task" in options:
+            self._obj_name, self._bin_name = options["task"]
+        elif self._fixed_task is not None:
             self._obj_name, self._bin_name = self._fixed_task
         else:
             idx = self.np_random.integers(len(self._task_pool))
@@ -503,7 +545,7 @@ class PickPlaceGymEnv(gym.Env):
             Tuple of (obs, reward, terminated, truncated, info).
         """
         action = np.asarray(action, dtype=np.float32)
-        ee_target, gripper_cmd = self._relative_action_to_world_pos(action)
+        ee_target, gripper_cmd = self.decode_action(action)
 
         if gripper_cmd > 0.5:
             self._robot.open_gripper()
@@ -523,6 +565,12 @@ class PickPlaceGymEnv(gym.Env):
             # collision (reward < 0) is not success; otherwise use the done flag
             terminated = reward < 0 or success
             info = {"success": success and reward >= 0}
+            # Expose staged reward breakdown: [total, r0/5, r1/5, r2/5, r3/5, r4/5]
+            if self._reward_hwm is not None:
+                normed = self._reward_hwm / len(self._reward_hwm)
+                info["reward_components"] = np.array(
+                    [normed.sum(), *normed], dtype=np.float32
+                )
         else:
             terminated = success
             info = {"success": success}

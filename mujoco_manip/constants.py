@@ -20,9 +20,6 @@ TASK_SETS = {
     "cross": CROSS_TASKS,
 }
 
-# Backward compat alias
-SINGLE_TASKS = MATCH_TASKS
-
 IMAGE_SIZE = 224
 CONTROL_FPS = 30
 PHYSICS_DT = 0.002
