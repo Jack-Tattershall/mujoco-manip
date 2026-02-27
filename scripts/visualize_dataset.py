@@ -1,8 +1,6 @@
 """Visualize all features of a LeRobot dataset episode in Rerun."""
 
 import argparse
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -10,20 +8,14 @@ import rerun as rr
 import torch
 import tqdm
 
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
-sys.path.insert(0, _PROJECT_ROOT)
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from lerobot.datasets.lerobot_dataset import LeRobotDataset  # noqa: E402
-
-from mujoco_manip.features import DIM_NAMES  # noqa: E402
-from mujoco_manip.pose_utils import (  # noqa: E402
+from mujoco_manip.features import DIM_NAMES
+from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     se3_from_pos_quat_g,
     se3_from_pos_rot6d_g,
 )
-
-SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 
 SKIP_KEYS: set[str] = {
     "frame_index",
@@ -132,10 +124,10 @@ def visualize_episode(
         or has_action_rel_pos_rot6d_g
     )
     if has_any_rel:
-        from mujoco_manip.env import PickPlaceEnv  # noqa: E402
-        from mujoco_manip.robot import PandaRobot  # noqa: E402
+        from mujoco_manip.env import PickPlaceEnv
+        from mujoco_manip.robot import PandaRobot
 
-        _env = PickPlaceEnv(SCENE_XML, add_wrist_camera=False)
+        _env = PickPlaceEnv(add_wrist_camera=False)
         _robot = PandaRobot(_env.model, _env.data)
         _env.reset_to_keyframe("scene_start")
         T_initial = pos_rotmat_to_se3(_robot.ee_pos, _robot.ee_xmat)
@@ -297,7 +289,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    dataset_root = os.path.join(args.root, args.repo_id)
+    dataset_root = Path(args.root) / args.repo_id
     dataset = LeRobotDataset(
         args.repo_id,
         episodes=[args.episode_index],

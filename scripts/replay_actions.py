@@ -2,9 +2,9 @@
 
 import argparse
 import json
-import os
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -42,7 +42,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    dataset_root = os.path.join(args.root, args.repo_id)
+    dataset_root = Path(args.root) / args.repo_id
     dataset = LeRobotDataset(
         args.repo_id,
         episodes=[args.episode_index],
@@ -63,14 +63,14 @@ def main() -> None:
     action_mode = args.action_key.replace("action.", "").replace(".", "_")
 
     # Read generation metadata to restore randomization and task
-    metadata_path = os.path.join(dataset_root, "metadata.json")
+    metadata_path = dataset_root / "metadata.json"
     has_randomization = False
     spawn_x_range = (-0.20, 0.20)
     spawn_y_range = (0.30, 0.45)
     episode_seed: int | None = None
     task: tuple[str, str] | None = None
 
-    if os.path.exists(metadata_path):
+    if metadata_path.exists():
         with open(metadata_path) as f:
             metadata = json.load(f)
 
