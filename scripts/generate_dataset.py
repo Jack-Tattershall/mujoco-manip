@@ -147,10 +147,7 @@ def run_episode(
         )
         action = np.array([*target_pos, fsm.gripper_val], dtype=np.float32)
 
-        # Step the gym env
-        obs, reward, terminated, truncated, info = gym_env.step(action)
-
-        # Build frame from gym obs
+        # Build frame from PRE-STEP obs (obs carries forward from reset/prev step)
         frame: dict = {"task": task_str}
 
         for obs_key, feat_key in _OBS_TO_FEATURE.items():
@@ -189,7 +186,10 @@ def run_episode(
         if need_phase_desc:
             frame["observation.phase_description"] = fsm.phase_description
 
-        # Staged reward from info
+        # Step AFTER recording pre-step obs
+        obs, reward, terminated, truncated, info = gym_env.step(action)
+
+        # Staged reward from post-step info (reward for taking this action)
         if need_reward and "reward_components" in info:
             frame["next.reward"] = info["reward_components"]
 
