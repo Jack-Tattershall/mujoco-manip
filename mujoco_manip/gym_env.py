@@ -57,7 +57,7 @@ class PickPlaceGymEnv(gym.Env):
     (initial-EE-frame) EE poses under ``state.ee.*`` and ``state.ee.*_rel``.
     """
 
-    metadata = {"render_modes": ["rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["rgb_array", "human"], "render_fps": 30}
 
     def __init__(
         self,
@@ -533,11 +533,22 @@ class PickPlaceGymEnv(gym.Env):
         return obs, reward, terminated, truncated, info
 
     def render(self) -> np.ndarray | None:
-        """Return an overhead RGB image if render_mode is ``'rgb_array'``."""
+        """Render the environment.
+
+        ``'rgb_array'``: return an overhead RGB image.
+        ``'human'``: open an interactive MuJoCo viewer window.
+        """
         if self.render_mode == "rgb_array":
             return self._renderer.render(self._env.data, "overhead")
+        if self.render_mode == "human":
+            if self._env.viewer is None:
+                self._env.launch_viewer()
+            self._env.sync()
         return None
 
     def close(self) -> None:
-        """Release renderer resources."""
+        """Release renderer and viewer resources."""
         self._renderer.close()
+        if self._env.viewer is not None:
+            self._env.viewer.close()
+            self._env.viewer = None
