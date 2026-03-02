@@ -19,6 +19,7 @@ class State(Enum):
     SETTLE_AT_BIN = auto()
     LOWER_TO_BIN = auto()
     RELEASE = auto()
+    RETREAT_UP = auto()
     RETREAT = auto()
     DONE = auto()
 
@@ -44,6 +45,7 @@ _STATE_TO_PHASE = {
     State.SETTLE_AT_BIN: Phase.TRANSPORTING,
     State.LOWER_TO_BIN: Phase.PLACING,
     State.RELEASE: Phase.PLACING,
+    State.RETREAT_UP: Phase.RETREATING,
     State.RETREAT: Phase.RETREATING,
     State.DONE: Phase.DONE,
 }
@@ -64,7 +66,6 @@ GRASP_HEIGHT = 0.36  # finger pads at cube center level
 LIFT_HEIGHT = 0.55
 TRANSIT_HEIGHT = 0.55  # lateral move height (clears bins)
 RELEASE_HEIGHT = 0.45  # lower to this before releasing
-RETREAT_HEIGHT = 0.55
 
 # Settle times (simulation steps)
 GRIPPER_SETTLE_STEPS = 150
@@ -103,6 +104,7 @@ class PickAndPlaceTask:
         self._target_pos: np.ndarray | None = None
         self._transit_end: np.ndarray | None = None
         self._gripper_open: bool = True
+        self._initial_ee_pos: np.ndarray = robot.ee_pos.copy()
 
     @property
     def is_done(self) -> bool:
@@ -259,10 +261,18 @@ class PickAndPlaceTask:
         elif self.state == State.RELEASE:
             self.settle_counter -= n_steps
             if self.settle_counter <= 0:
-                self._target_pos = np.array([0.0, 0.3, RETREAT_HEIGHT])
-                self.state = State.RETREAT
-                return "Retreating to neutral position"
+                ee_xy = self.robot.ee_pos[:2]
+                self._target_pos = np.array([ee_xy[0], ee_xy[1], TRANSIT_HEIGHT])
+                self.state = State.RETREAT_UP
+                return "Lifting above bins"
             return f"Releasing ({self.settle_counter})"
+
+        elif self.state == State.RETREAT_UP:
+            if self.controller.reached(self._target_pos):
+                self._target_pos = self._initial_ee_pos.copy()
+                self.state = State.RETREAT
+                return "Retreating to initial position"
+            return "Lifting above bins"
 
         elif self.state == State.RETREAT:
             if self.controller.reached(self._target_pos):
