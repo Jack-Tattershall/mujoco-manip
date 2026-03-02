@@ -1,8 +1,6 @@
 """Entry point for the Franka Panda pick-and-place simulation."""
 
 import argparse
-import os
-import sys
 import time
 
 import numpy as np
@@ -11,12 +9,6 @@ from mujoco_manip.env import PickPlaceEnv
 from mujoco_manip.robot import PandaRobot
 from mujoco_manip.controller import IKController
 from mujoco_manip.pick_and_place import PickAndPlaceTask
-
-
-SCENE_XML = os.path.join(os.path.dirname(__file__), "pick_and_place_scene.xml")
-MENAGERIE_DIR = os.path.join(
-    os.path.dirname(__file__), "third_party", "mujoco_menagerie"
-)
 
 
 def main() -> None:
@@ -35,15 +27,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not os.path.isdir(MENAGERIE_DIR):
-        print(f"Error: mujoco_menagerie not found at {MENAGERIE_DIR}")
-        print("Run: bash setup_menagerie.sh")
-        sys.exit(1)
-
     rng = np.random.default_rng(args.seed) if args.randomize else None
 
     print("Loading scene...")
-    env = PickPlaceEnv(SCENE_XML, add_wrist_camera=True)
+    env = PickPlaceEnv(add_wrist_camera=True)
     env.reset_to_keyframe("scene_start")
     if rng is not None:
         env.randomize_objects(rng)

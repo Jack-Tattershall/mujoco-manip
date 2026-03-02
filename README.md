@@ -93,7 +93,7 @@ uv run python scripts/replay_actions.py --repo-id user/pick-place --episode-inde
 
 ## Run the interactive demo
 
-Opens a MuJoCo viewer and runs the FSM to pick and place all 3 coloured cubes into their bins. Requires `bash setup_menagerie.sh` to clone the Panda model.
+Opens a MuJoCo viewer and runs the FSM to pick and place all 3 coloured cubes into their bins.
 
 ```bash
 uv run python main.py
