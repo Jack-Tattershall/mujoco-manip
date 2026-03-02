@@ -417,7 +417,8 @@ class PickPlaceGymEnv(gym.Env):
             r4 = 0.0
         else:
             init_ee_pos = self._initial_ee_se3[:3, 3]
-            r4 = 1.0 - min(np.linalg.norm(ee_pos - init_ee_pos) / D_MAX, 1.0)
+            dist = np.linalg.norm(ee_pos - init_ee_pos)
+            r4 = 1.0 if dist < 0.05 else 1.0 - min(dist / D_MAX, 1.0)
 
         # High-water marks → guarantees monotonicity
         components = np.array([r0, r1, r2, r3, r4])
