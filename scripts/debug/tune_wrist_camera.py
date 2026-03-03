@@ -20,9 +20,9 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
+from mujoco_manip.data import SCENE_XML  # noqa: E402
 from mujoco_manip.env import PickPlaceEnv  # noqa: E402
 
-SCENE_XML = os.path.join(_PROJECT_ROOT, "pick_and_place_scene.xml")
 IMAGE_SIZE = 480
 
 # Global state

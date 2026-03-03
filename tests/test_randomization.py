@@ -4,14 +4,13 @@ import mujoco
 import numpy as np
 import pytest
 
+from mujoco_manip.data import SCENE_XML
 from mujoco_manip.env import PickPlaceEnv
 from mujoco_manip.randomization import (
     MIN_OBJ_SEPARATION,
     OBJ_JOINT_NAMES,
     randomize_object_positions,
 )
-
-SCENE_XML = "pick_and_place_scene.xml"
 
 X_RANGE = (-0.30, 0.30)
 Y_RANGE = (0.28, 0.48)
