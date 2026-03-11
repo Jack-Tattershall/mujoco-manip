@@ -1,0 +1,19 @@
+# Hydra config for bottle-packing dataset generation.
+repo_id: null  # Required: e.g. user/bottle-packing-v1
+num_episodes: 100
+root: ./datasets
+
+# Target well: null = cycle through wells; integer = single well
+well_index: null
+# Well set: "all" (20 wells)
+wells: all
+
+reward_type: staged
+seed: 0
+
+# Optional feature subset (null = all)
+features: null
+
+# HuggingFace Hub
+push_to_hub: false
+private: true

@@ -7,8 +7,9 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from .data import PANDA_DIR as _DEFAULT_PANDA_DIR
-from .data import SCENE_XML as _DEFAULT_SCENE_XML
+from mujoco_manip.data import PANDA_DIR as _DEFAULT_PANDA_DIR
+from mujoco_manip.data import SCENE_XML as _DEFAULT_SCENE_XML
+
 from .randomization import randomize_object_positions
 
 

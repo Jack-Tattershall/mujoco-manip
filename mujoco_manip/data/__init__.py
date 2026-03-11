@@ -4,4 +4,5 @@ from pathlib import Path
 
 DATA_DIR = Path(__file__).parent
 SCENE_XML = str(DATA_DIR / "pick_and_place_scene.xml")
+BOTTLE_PACKING_SCENE_XML = str(DATA_DIR / "bottle_packing_scene.xml")
 PANDA_DIR = str(DATA_DIR / "franka_emika_panda")

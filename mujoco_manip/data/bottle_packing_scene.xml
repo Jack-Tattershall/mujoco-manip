@@ -1,0 +1,242 @@
+<mujoco model="bottle_packing_scene">
+  <compiler angle="radian"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81" noslip_iterations="10"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="150" elevation="-25"/>
+  </visual>
+
+  <statistic center="0.10 0.45 0.3" extent="1.2"/>
+
+  <include file="franka_emika_panda/panda.xml"/>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0.0 0.0 0.0"
+             width="512" height="3072"/>
+    <texture name="groundplane" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2"
+             width="300" height="300" mark="edge" markrgb="0.2 0.3 0.4"/>
+    <material name="groundplane" texture="groundplane" texrepeat="5 5" texuniform="true"
+              reflectance="0.2"/>
+    <material name="belt_mat" rgba="0.15 0.15 0.15 1"/>
+    <material name="metal_mat" rgba="0.5 0.5 0.55 1" specular="0.8"/>
+    <material name="table_mat" rgba="0.6 0.5 0.4 1"/>
+    <material name="table_leg_mat" rgba="0.4 0.35 0.3 1"/>
+    <material name="crate_mat" rgba="0.55 0.45 0.30 1"/>
+    <material name="crate_wall_mat" rgba="0.50 0.40 0.28 0.8"/>
+    <material name="bottle_mat" rgba="0.15 0.55 0.20 1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Lighting -->
+    <light pos="0 0 2.0" dir="0 0 -1" directional="true" diffuse="0.8 0.8 0.8"
+           specular="0.3 0.3 0.3" castshadow="true"/>
+    <light pos="0.5 0.5 1.5" diffuse="0.4 0.4 0.4" specular="0.1 0.1 0.1"/>
+
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="2 2 0.01" material="groundplane" pos="0 0 0"/>
+
+    <!-- Cameras -->
+    <camera name="overhead" pos="0.28 0.20 0.71" xyaxes="0.9285 0.3714 0.0 -0.3148 0.7869 0.5307" fovy="86" mode="fixed"/>
+    <camera name="side" pos="0.9 -0.3 0.8" xyaxes="0 1 0 -0.4 0 0.9" mode="fixed"/>
+
+    <!-- ============ CONVEYOR BELT ============ -->
+    <!-- Runs along X axis from x=-0.76 to x=0.06, at y=0.40 (82cm long, 30cm wide) -->
+    <body name="conveyor" pos="-0.35 0.40 0.0">
+      <!-- Belt surface: 82cm x 30cm, top at z=0.24 -->
+      <geom name="belt_surface" type="box" size="0.41 0.15 0.02" pos="0 0 0.22"
+            material="belt_mat" mass="50"/>
+      <!-- Side rails -->
+      <geom name="rail_left" type="box" size="0.41 0.005 0.008" pos="0 -0.155 0.248"
+            material="metal_mat"/>
+      <geom name="rail_right" type="box" size="0.41 0.005 0.008" pos="0 0.155 0.248"
+            material="metal_mat"/>
+      <!-- Legs -->
+      <geom name="conv_leg_fl" type="cylinder" size="0.015 0.10" pos="-0.37 -0.13 0.10"
+            material="metal_mat"/>
+      <geom name="conv_leg_fr" type="cylinder" size="0.015 0.10" pos="-0.37 0.13 0.10"
+            material="metal_mat"/>
+      <geom name="conv_leg_bl" type="cylinder" size="0.015 0.10" pos="0.37 -0.13 0.10"
+            material="metal_mat"/>
+      <geom name="conv_leg_br" type="cylinder" size="0.015 0.10" pos="0.37 0.13 0.10"
+            material="metal_mat"/>
+      <!-- End rollers (visual) -->
+      <geom name="end_roller" type="cylinder" size="0.02 0.15" pos="0.41 0 0.22"
+            material="metal_mat" euler="1.5708 0 0"/>
+      <geom name="start_roller" type="cylinder" size="0.02 0.15" pos="-0.41 0 0.22"
+            material="metal_mat" euler="1.5708 0 0"/>
+      <!-- Stopper at belt end (visual only) -->
+      <geom name="belt_stopper" type="box" size="0.005 0.155 0.035" pos="0.41 0 0.275"
+            material="metal_mat" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- ============ TABLE FOR CRATE ============ -->
+    <body name="crate_table" pos="0.25 0.40 0.0">
+      <!-- Tabletop: 34cm x 30cm, surface at z=0.22 -->
+      <geom name="crate_tabletop" type="box" size="0.17 0.15 0.02" pos="0 0 0.22"
+            material="table_mat" mass="20"/>
+      <!-- Legs -->
+      <geom name="tbl_leg1" type="cylinder" size="0.02 0.10" pos="0.15 0.13 0.10"
+            material="table_leg_mat"/>
+      <geom name="tbl_leg2" type="cylinder" size="0.02 0.10" pos="-0.15 0.13 0.10"
+            material="table_leg_mat"/>
+      <geom name="tbl_leg3" type="cylinder" size="0.02 0.10" pos="0.15 -0.13 0.10"
+            material="table_leg_mat"/>
+      <geom name="tbl_leg4" type="cylinder" size="0.02 0.10" pos="-0.15 -0.13 0.10"
+            material="table_leg_mat"/>
+    </body>
+
+    <!-- ============ CRATE (5x4 wells, 55mm spacing) ============ -->
+    <!-- On table surface at z=0.24.  Wells: 51mm clear opening, 12.5mm clearance per side. -->
+    <!-- Well cols at x: -0.11, -0.055, 0, 0.055, 0.11 -->
+    <!-- Well rows at y: -0.0825, -0.0275, 0.0275, 0.0825 -->
+    <body name="crate" pos="0.25 0.40 0.24">
+      <!-- Floor -->
+      <geom name="crate_floor" type="box" size="0.14 0.113 0.002" pos="0 0 0"
+            material="crate_mat"/>
+      <!-- Outer walls (half-height 0.025 → 5cm tall) -->
+      <geom name="crate_front" type="box" size="0.14 0.003 0.025" pos="0 -0.113 0.027"
+            material="crate_wall_mat"/>
+      <geom name="crate_back" type="box" size="0.14 0.003 0.025" pos="0 0.113 0.027"
+            material="crate_wall_mat"/>
+      <geom name="crate_left" type="box" size="0.003 0.113 0.025" pos="-0.14 0 0.027"
+            material="crate_wall_mat"/>
+      <geom name="crate_right" type="box" size="0.003 0.113 0.025" pos="0.14 0 0.027"
+            material="crate_wall_mat"/>
+      <!-- Vertical dividers (between columns, parallel to Y axis) -->
+      <geom name="div_v0" type="box" size="0.002 0.11 0.025" pos="-0.0825 0 0.027"
+            material="crate_wall_mat"/>
+      <geom name="div_v1" type="box" size="0.002 0.11 0.025" pos="-0.0275 0 0.027"
+            material="crate_wall_mat"/>
+      <geom name="div_v2" type="box" size="0.002 0.11 0.025" pos="0.0275 0 0.027"
+            material="crate_wall_mat"/>
+      <geom name="div_v3" type="box" size="0.002 0.11 0.025" pos="0.0825 0 0.027"
+            material="crate_wall_mat"/>
+      <!-- Horizontal dividers (between rows, parallel to X axis) -->
+      <geom name="div_h0" type="box" size="0.137 0.002 0.025" pos="0 -0.055 0.027"
+            material="crate_wall_mat"/>
+      <geom name="div_h1" type="box" size="0.137 0.002 0.025" pos="0 0.0 0.027"
+            material="crate_wall_mat"/>
+      <geom name="div_h2" type="box" size="0.137 0.002 0.025" pos="0 0.055 0.027"
+            material="crate_wall_mat"/>
+    </body>
+
+    <!-- ============ BOTTLES (20 total, one per well) ============ -->
+    <!-- All start hidden underground; env.setup_bottles() places them. -->
+    <body name="bottle_00" pos="0 0 -1">
+      <freejoint name="bottle_00_jnt"/>
+      <geom name="bottle_00_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_01" pos="0 0 -1">
+      <freejoint name="bottle_01_jnt"/>
+      <geom name="bottle_01_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_02" pos="0 0 -1">
+      <freejoint name="bottle_02_jnt"/>
+      <geom name="bottle_02_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_03" pos="0 0 -1">
+      <freejoint name="bottle_03_jnt"/>
+      <geom name="bottle_03_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_04" pos="0 0 -1">
+      <freejoint name="bottle_04_jnt"/>
+      <geom name="bottle_04_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_05" pos="0 0 -1">
+      <freejoint name="bottle_05_jnt"/>
+      <geom name="bottle_05_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_06" pos="0 0 -1">
+      <freejoint name="bottle_06_jnt"/>
+      <geom name="bottle_06_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_07" pos="0 0 -1">
+      <freejoint name="bottle_07_jnt"/>
+      <geom name="bottle_07_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_08" pos="0 0 -1">
+      <freejoint name="bottle_08_jnt"/>
+      <geom name="bottle_08_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_09" pos="0 0 -1">
+      <freejoint name="bottle_09_jnt"/>
+      <geom name="bottle_09_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_10" pos="0 0 -1">
+      <freejoint name="bottle_10_jnt"/>
+      <geom name="bottle_10_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_11" pos="0 0 -1">
+      <freejoint name="bottle_11_jnt"/>
+      <geom name="bottle_11_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_12" pos="0 0 -1">
+      <freejoint name="bottle_12_jnt"/>
+      <geom name="bottle_12_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_13" pos="0 0 -1">
+      <freejoint name="bottle_13_jnt"/>
+      <geom name="bottle_13_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_14" pos="0 0 -1">
+      <freejoint name="bottle_14_jnt"/>
+      <geom name="bottle_14_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_15" pos="0 0 -1">
+      <freejoint name="bottle_15_jnt"/>
+      <geom name="bottle_15_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_16" pos="0 0 -1">
+      <freejoint name="bottle_16_jnt"/>
+      <geom name="bottle_16_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_17" pos="0 0 -1">
+      <freejoint name="bottle_17_jnt"/>
+      <geom name="bottle_17_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_18" pos="0 0 -1">
+      <freejoint name="bottle_18_jnt"/>
+      <geom name="bottle_18_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+    <body name="bottle_19" pos="0 0 -1">
+      <freejoint name="bottle_19_jnt"/>
+      <geom name="bottle_19_geom" type="cylinder" size="0.013 0.04" material="bottle_mat"
+            mass="0.05" condim="4" friction="2.0 1.0 0.01"/>
+    </body>
+  </worldbody>
+
+  <keyframe>
+    <!-- Ready pose: arm at home, gripper open, all 20 bottles hidden underground -->
+    <!-- qpos: 9 robot + 20×7 bottle free joints = 149 values -->
+    <key name="scene_start"
+         qpos="1.5708 -0.4 0 -2.0 0 1.8 0.785 0.04 0.04
+               0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0
+               0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0
+               0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0
+               0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0
+               0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0  0 0 -1 1 0 0 0"
+         ctrl="1.5708 -0.4 0 -2.0 0 1.8 0.785 255"/>
+  </keyframe>
+</mujoco>

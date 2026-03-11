@@ -10,7 +10,7 @@ import tqdm
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from mujoco_manip.features import DIM_NAMES
+from mujoco_manip.tasks.pick_and_place.features import DIM_NAMES
 from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     se3_from_pos_quat_g,
