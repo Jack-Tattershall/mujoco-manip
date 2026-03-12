@@ -473,7 +473,7 @@ class BottlePackingGymEnv(gym.Env):
 
         model, data = self._env.model, self._env.data
 
-        # Active bottle keypoint (now at pickup position)
+        # Static target keypoints (goal conditioning, computed once at t=0)
         bottle_3d = data.xpos[
             mujoco.mj_name2id(
                 model, mujoco.mjtObj.mjOBJ_BODY, self._env.active_bottle_body
@@ -483,7 +483,6 @@ class BottlePackingGymEnv(gym.Env):
             model, data, "overhead", bottle_3d, self._image_size
         ).flatten()
 
-        # Well keypoint (computed from well position)
         well_pos_3d = well_position(self._well_index)
         well_3d = well_pos_3d[np.newaxis]
         self._target_well_kp_overhead = project_3d_to_2d(
