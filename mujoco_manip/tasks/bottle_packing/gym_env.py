@@ -5,7 +5,7 @@ import mujoco
 import numpy as np
 from gymnasium import spaces
 
-from mujoco_manip.cameras import CameraRenderer, project_3d_to_2d
+from mujoco_manip.cameras import CameraRenderer, compute_keypoints, project_3d_to_2d
 from mujoco_manip.controller import IKController
 from mujoco_manip.data import BOTTLE_PACKING_SCENE_XML as _DEFAULT_XML
 from mujoco_manip.pose_utils import (
@@ -251,15 +251,10 @@ class BottlePackingGymEnv(gym.Env):
 
         Keypoint bodies: active bottle, crate, hand.
         """
-        model, data = self._env.model, self._env.data
         kp_bodies = [self._env.active_bottle_body, CRATE_BODY, "hand"]
-        points_3d = np.array(
-            [
-                data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)]
-                for name in kp_bodies
-            ]
+        return compute_keypoints(
+            self._env.model, self._env.data, camera_name, kp_bodies, self._image_size
         )
-        return project_3d_to_2d(model, data, camera_name, points_3d, self._image_size)
 
     def _get_obs(self) -> dict[str, np.ndarray]:
         data = self._env.data

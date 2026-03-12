@@ -74,8 +74,6 @@ PHYSICS_DT = 0.002
 ACTION_REPEAT = 16  # int(1/30 / 0.002) ≈ 16 → ~31 Hz control
 MAX_EPISODE_STEPS = 500
 
-KEYPOINT_BODIES = [CRATE_BODY, "hand"]
-
 
 def well_row_col(well_index: int) -> tuple[int, int]:
     """Convert linear well index to (row, col).

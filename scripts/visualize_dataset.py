@@ -77,6 +77,14 @@ _BP_KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]
             ("hand", (255, 255, 255)),
         ],
     ),
+    "observation.keypoints_wrist": (
+        "observation.images.wrist",
+        [
+            ("bottle", (255, 160, 0)),
+            ("crate", (0, 200, 200)),
+            ("hand", (255, 255, 255)),
+        ],
+    ),
 }
 _BP_SPECIAL_KEYS: set[str] = {
     "observation.target_well_onehot",
@@ -117,12 +125,12 @@ def visualize_episode(
     """
     rr.init(f"{dataset.repo_id}/episode_{episode_index}", spawn=(save_path is None))
 
-    sample = dataset[0]
-    feature_keys = sorted(k for k in sample if k not in SKIP_KEYS)
+    first_frame = dataset[0]
+    feature_keys = sorted(k for k in first_frame if k not in SKIP_KEYS)
     print(f"Dataset features: {feature_keys}")
 
     # Auto-detect task and load matching config
-    task = _detect_task(sample)
+    task = _detect_task(first_frame)
     print(f"Detected task: {task}")
 
     if task == "bottle_packing":
@@ -142,7 +150,6 @@ def visualize_episode(
     action_rel_trail: list[list[float]] = []
     T_initial: np.ndarray | None = None
 
-    first_frame = dataset[0]
     has_state_pos_quat_g = "observation.state.ee.pos_quat_g" in first_frame
     has_state_rel_pos_quat_g = "observation.state.ee.pos_quat_g_rel" in first_frame
     has_state_rel_pos_rot6d_g = "observation.state.ee.pos_rot6d_g_rel" in first_frame
