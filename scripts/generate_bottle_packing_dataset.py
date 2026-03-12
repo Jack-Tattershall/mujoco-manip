@@ -1,6 +1,12 @@
-"""Generate a LeRobot v3.0 dataset from expert bottle-packing FSM demonstrations."""
+"""Generate a LeRobot v3.0 dataset from expert bottle-packing FSM demonstrations.
+
+Each *run* packs up to 20 bottles into wells (random or sequential order).
+Each bottle pick-and-place is stored as one episode, with the scene state
+reflecting previously packed bottles — matching ``main_bottle_packing.py``.
+"""
 
 import json
+import random
 from pathlib import Path
 
 import hydra
@@ -10,7 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from mujoco_manip.tasks.bottle_packing.constants import (
     ACTION_REPEAT,
     CONTROL_FPS,
-    TASK_SETS,
+    NUM_WELLS,
     well_row_col,
 )
 from mujoco_manip.tasks.bottle_packing.features import FEATURES
@@ -61,14 +67,52 @@ def get_actions(
     )
 
 
+def build_well_schedule(
+    task: str,
+    num_bottles: int,
+    rng: random.Random,
+) -> list[int]:
+    """Return the ordered list of target wells for one run.
+
+    Args:
+        task: ``"random"`` or ``"sequential"``.
+        num_bottles: How many bottles to pack in this run.
+        rng: Random number generator (only used for ``"random"``).
+
+    Returns:
+        List of well indices, length ``num_bottles``.
+    """
+    wells = list(range(NUM_WELLS))
+    if task == "random":
+        rng.shuffle(wells)
+    return wells[:num_bottles]
+
+
 def run_episode(
     gym_env: BottlePackingGymEnv,
+    bottle_index: int,
     well_index: int,
+    packed: dict[int, int],
     feature_keys: set[str],
     reward_type: str = "staged",
 ) -> list[dict]:
-    """Run one expert FSM episode and collect frames."""
-    obs, info = gym_env.reset(options={"well_index": well_index})
+    """Run one expert FSM episode and collect frames.
+
+    Args:
+        gym_env: The gymnasium bottle-packing environment.
+        bottle_index: Which bottle body to spawn on conveyor.
+        well_index: Target well for this bottle.
+        packed: Mapping of already-packed ``bottle_idx → well_idx``.
+        feature_keys: Which dataset features to record.
+        reward_type: Reward scheme.
+    """
+    obs, info = gym_env.reset(
+        options={
+            "well_index": well_index,
+            "bottle_index": bottle_index,
+            "packed": packed,
+        }
+    )
 
     fsm = BottlePackingTask(
         gym_env.bottle_packing_env,
@@ -157,14 +201,12 @@ def main(cfg: DictConfig) -> None:
     if not cfg.repo_id:
         raise ValueError("repo_id is required (e.g. repo_id=user/bottle-packing)")
 
-    if cfg.well_index is not None:
-        well_list = [int(cfg.well_index)]
-    elif cfg.wells in TASK_SETS:
-        well_list = TASK_SETS[cfg.wells]
-    else:
-        raise ValueError(
-            f"Unknown well set '{cfg.wells}'. Choose from: {list(TASK_SETS.keys())}"
-        )
+    task = cfg.get("task", "random")
+    if task not in ("random", "sequential"):
+        raise ValueError(f"task must be 'random' or 'sequential', got '{task}'")
+
+    num_bottles = cfg.get("num_bottles") or NUM_WELLS
+    num_bottles = min(int(num_bottles), NUM_WELLS)
 
     features = FEATURES
     if cfg.features is not None:
@@ -202,28 +244,47 @@ def main(cfg: DictConfig) -> None:
         image_writer_threads=4,
     )
 
-    well_label = str(cfg.well_index) if cfg.well_index is not None else cfg.wells
-    print(f"Wells {well_label}: {len(well_list)} well(s)")
+    rng = random.Random(cfg.seed)
+    total_episodes = 0
+
+    print(f"Task: {task}, {num_bottles} bottles/run, {cfg.num_episodes} episodes")
+
     for ep_idx in range(cfg.num_episodes):
-        well_idx = well_list[ep_idx % len(well_list)]
+        # Start a new run when the previous one is exhausted
+        if ep_idx % num_bottles == 0:
+            well_schedule = build_well_schedule(task, num_bottles, rng)
+            packed: dict[int, int] = {}
+            run_num = ep_idx // num_bottles + 1
+            print(f"\n--- Run {run_num} (well order: {well_schedule}) ---")
+
+        step_in_run = ep_idx % num_bottles
+        bottle_idx = step_in_run
+        well_idx = well_schedule[step_in_run]
         row, col = well_row_col(well_idx)
 
         print(
-            f"Episode {ep_idx + 1}/{cfg.num_episodes}: well ({row},{col})",
+            f"Episode {ep_idx + 1}/{cfg.num_episodes}: "
+            f"bottle {bottle_idx} → well ({row},{col})",
             end="",
             flush=True,
         )
 
         frames = run_episode(
             gym_env,
-            well_idx,
-            feature_keys,
+            bottle_index=bottle_idx,
+            well_index=well_idx,
+            packed=packed,
+            feature_keys=feature_keys,
             reward_type=cfg.reward_type,
         )
 
         for frame in frames:
             dataset.add_frame(frame)
         dataset.save_episode()
+
+        # Record this bottle as packed for subsequent episodes
+        packed[bottle_idx] = well_idx
+        total_episodes += 1
 
         print(f" ({len(frames)} frames)")
 
@@ -245,7 +306,7 @@ def main(cfg: DictConfig) -> None:
     dataset.finalize()
     gym_env.close()
     print(f"\nDataset saved to {dataset_path}")
-    print(f"Total episodes: {cfg.num_episodes}")
+    print(f"Total episodes: {total_episodes}")
 
     if cfg.push_to_hub:
         print(f"\nPushing to HF Hub: {cfg.repo_id} (private={cfg.private})...")

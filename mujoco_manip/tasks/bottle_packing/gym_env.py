@@ -20,7 +20,6 @@ from mujoco_manip.robot import PandaRobot
 from .constants import (
     ACTION_REPEAT,
     BOTTLE_BODIES,
-    CRATE_BODY,
     IMAGE_SIZE,
     MAX_EPISODE_STEPS,
     NUM_WELLS,
@@ -101,6 +100,7 @@ class BottlePackingGymEnv(gym.Env):
         self._step_count = 0
 
         self._env = BottlePackingEnv(xml_path, add_wrist_camera=True)
+        self._env.colorize_bottles()
         self._robot = PandaRobot(self._env.model, self._env.data)
         self._controller = IKController(self._env.model, self._env.data, self._robot)
         self._renderer = CameraRenderer(self._env.model, image_size, image_size)
@@ -249,12 +249,27 @@ class BottlePackingGymEnv(gym.Env):
     def _compute_keypoints(self, camera_name: str) -> np.ndarray:
         """Project keypoint bodies to normalised pixel coordinates (3, 2).
 
-        Keypoint bodies: active bottle, crate, hand.
+        Keypoint bodies: active bottle, target well, hand.
+        The target well keypoint uses the computed well position rather
+        than the crate body centre so the keypoint reflects the actual
+        slot the bottle should be placed into.
         """
-        kp_bodies = [self._env.active_bottle_body, CRATE_BODY, "hand"]
-        return compute_keypoints(
-            self._env.model, self._env.data, camera_name, kp_bodies, self._image_size
+        model, data = self._env.model, self._env.data
+        # Bottle and hand from body positions
+        body_kps = compute_keypoints(
+            model,
+            data,
+            camera_name,
+            [self._env.active_bottle_body, "hand"],
+            self._image_size,
         )
+        # Target well from computed world position
+        well_pos = well_position(self._well_index)
+        well_kp = project_3d_to_2d(
+            model, data, camera_name, well_pos[np.newaxis], self._image_size
+        )
+        # Stack as (bottle, well, hand) — shape (3, 2)
+        return np.vstack([body_kps[:1], well_kp, body_kps[1:]])
 
     def _get_obs(self) -> dict[str, np.ndarray]:
         data = self._env.data
@@ -433,8 +448,12 @@ class BottlePackingGymEnv(gym.Env):
 
         Args:
             seed: Random seed for reproducibility.
-            options: Additional reset options. Supports ``"well_index"`` key
-                to override the target well for this episode.
+            options: Additional reset options. Supports:
+                ``"well_index"`` — target well for this episode.
+                ``"bottle_index"`` — which bottle body to spawn (default =
+                    ``well_index`` for sequential, must be set for random).
+                ``"packed"`` — dict mapping ``bottle_idx → well_idx`` for
+                    bottles already packed in wells from prior episodes.
         """
         super().reset(seed=seed)
 
@@ -456,14 +475,22 @@ class BottlePackingGymEnv(gym.Env):
             self._well_index = int(self.np_random.integers(len(self._well_pool)))
             self._well_index = self._well_pool[self._well_index]
 
+        # Determine bottle index (defaults to well_index for sequential mode)
+        bottle_index = (
+            options.get("bottle_index", self._well_index)
+            if options
+            else self._well_index
+        )
+
         # Place pre-packed bottles in wells, all others hidden
-        self._env.setup_scene(num_prepacked=self._well_index)
+        packed = options.get("packed") if options else None
+        self._env.setup_scene(num_prepacked=self._well_index, packed=packed)
 
         # Capture initial EE pose BEFORE conveyor animation (robot at home)
         self._capture_initial_pose()
 
         # Spawn active bottle on conveyor and deliver to pickup
-        self._env.spawn_bottle_on_conveyor(self._well_index)
+        self._env.spawn_bottle_on_conveyor(bottle_index)
         self._env.animate_conveyor()
 
         model, data = self._env.model, self._env.data

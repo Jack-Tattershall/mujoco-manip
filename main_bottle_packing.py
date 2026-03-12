@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument(
         "--task",
         choices=["sequential", "random"],
-        default="sequential",
+        default="random",
         help="'sequential' packs wells 0,1,2,...; 'random' picks a random empty well each time",
     )
     parser.add_argument(

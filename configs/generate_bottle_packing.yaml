@@ -3,13 +3,15 @@ repo_id: null  # Required: e.g. user/bottle-packing-v1
 num_episodes: 100
 root: ./datasets
 
-# Target well: null = cycle through wells; integer = single well
-well_index: null
-# Well set: "all" (20 wells)
-wells: all
+# Task mode: "random" shuffles well order per run; "sequential" packs 0,1,2,...
+task: random
+
+# Number of bottles to pack per run (each bottle = 1 episode).
+# null = all 20 wells.
+num_bottles: null
 
 reward_type: staged
-seed: 0
+seed: 42
 
 # Optional feature subset (null = all)
 features: null

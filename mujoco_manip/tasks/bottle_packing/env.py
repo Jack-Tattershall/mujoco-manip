@@ -180,29 +180,51 @@ class BottlePackingEnv:
                 continue
             self._freeze_bottle(idx)
 
-    def setup_scene(self, num_prepacked: int = 0) -> None:
+    def setup_scene(
+        self,
+        num_prepacked: int = 0,
+        packed: dict[int, int] | None = None,
+    ) -> None:
         """Set up scene with pre-packed bottles in wells, all others hidden.
 
-        Bottles 0..num_prepacked-1 are placed upright in their wells and
-        frozen.  All remaining bottles are hidden underground.
+        There are two modes:
+
+        *Sequential* (``packed`` is ``None``): bottles ``0..num_prepacked-1``
+        are placed in wells ``0..num_prepacked-1`` and frozen.
+
+        *Explicit* (``packed`` given): ``packed`` maps
+        ``bottle_index → well_index`` for each bottle that should be placed
+        in a well.  ``num_prepacked`` is ignored.
 
         Call after ``reset_to_keyframe`` and before
         ``spawn_bottle_on_conveyor``.
 
         Args:
-            num_prepacked: Number of bottles already packed in wells (0–20).
+            num_prepacked: Number of bottles already packed sequentially.
+            packed: Explicit bottle→well mapping (overrides ``num_prepacked``).
         """
         self._unfreeze_all_bottles()
-        self._active_bottle = num_prepacked  # next bottle to pack
         self._belt_bottle_indices = []
 
-        for i in range(NUM_WELLS):
-            if i < num_prepacked:
-                wp = well_position(i)
-                pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
-                self._set_bottle_pose(i, pos)
-            else:
-                self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+        if packed is not None:
+            for i in range(NUM_WELLS):
+                if i in packed:
+                    wp = well_position(packed[i])
+                    pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
+                    self._set_bottle_pose(i, pos)
+                else:
+                    self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+            # Active bottle = first unpacked index
+            self._active_bottle = max(packed.keys()) + 1 if packed else 0
+        else:
+            for i in range(NUM_WELLS):
+                if i < num_prepacked:
+                    wp = well_position(i)
+                    pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
+                    self._set_bottle_pose(i, pos)
+                else:
+                    self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+            self._active_bottle = num_prepacked
 
         self._freeze_inactive_bottles()
         mujoco.mj_forward(self.model, self.data)

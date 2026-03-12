@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import random
 import sys
 import time
 from pathlib import Path
@@ -11,7 +12,7 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from mujoco_manip.tasks.bottle_packing.constants import (
     ACTION_REPEAT,
-    TASK_SETS,
+    NUM_WELLS,
     well_row_col,
 )
 from mujoco_manip.tasks.bottle_packing.gym_env import BottlePackingGymEnv
@@ -64,23 +65,42 @@ def main() -> None:
     # Derive action_mode from the action key
     action_mode = args.action_key.replace("action.", "").replace(".", "_")
 
-    # Read generation metadata to restore task
+    # Read generation metadata to reconstruct the well schedule
     metadata_path = dataset_root / "metadata.json"
-    well_index: int = 0
-
+    metadata: dict = {}
     if metadata_path.exists():
         with open(metadata_path) as f:
             metadata = json.load(f)
 
-        meta_well = metadata.get("well_index")
-        meta_wells = metadata.get("wells", "all")
-        if meta_well is not None:
-            well_list = [int(meta_well)]
-        elif meta_wells in TASK_SETS:
-            well_list = TASK_SETS[meta_wells]
-        else:
-            well_list = TASK_SETS["all"]
-        well_index = well_list[args.episode_index % len(well_list)]
+    task_mode = metadata.get("task", "sequential")
+    seed = metadata.get("seed", 0)
+    num_bottles = metadata.get("num_bottles") or NUM_WELLS
+    num_bottles = min(int(num_bottles), NUM_WELLS)
+
+    # Rebuild the well schedule for the run containing this episode
+    rng = random.Random(seed)
+    ep = args.episode_index
+    # Fast-forward RNG through prior runs
+    num_prior_runs = ep // num_bottles
+    for _ in range(num_prior_runs):
+        wells = list(range(NUM_WELLS))
+        if task_mode == "random":
+            rng.shuffle(wells)
+
+    # Build schedule for the current run
+    wells = list(range(NUM_WELLS))
+    if task_mode == "random":
+        rng.shuffle(wells)
+    well_schedule = wells[:num_bottles]
+
+    step_in_run = ep % num_bottles
+    bottle_index = step_in_run
+    well_index = well_schedule[step_in_run]
+
+    # Build packed state from prior episodes in this run
+    packed: dict[int, int] = {}
+    for i in range(step_in_run):
+        packed[i] = well_schedule[i]
 
     gym_env = BottlePackingGymEnv(
         action_mode=action_mode,
@@ -88,10 +108,18 @@ def main() -> None:
         reward_type="staged",
     )
 
-    obs, info = gym_env.reset(options={"well_index": well_index})
+    obs, info = gym_env.reset(
+        options={
+            "well_index": well_index,
+            "bottle_index": bottle_index,
+            "packed": packed,
+        }
+    )
 
     row, col = well_row_col(well_index)
     print(f"Target well: ({row},{col}) [index {well_index}]")
+    if packed:
+        print(f"Pre-packed: {packed}")
 
     step_time: float = (
         gym_env.bottle_packing_env.model.opt.timestep * ACTION_REPEAT * args.slow

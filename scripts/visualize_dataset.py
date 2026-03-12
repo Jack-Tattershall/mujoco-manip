@@ -73,7 +73,7 @@ _BP_KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]
         "observation.images.overhead",
         [
             ("bottle", (255, 160, 0)),
-            ("crate", (0, 200, 200)),
+            ("well", (0, 200, 200)),
             ("hand", (255, 255, 255)),
         ],
     ),
@@ -81,7 +81,7 @@ _BP_KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]
         "observation.images.wrist",
         [
             ("bottle", (255, 160, 0)),
-            ("crate", (0, 200, 200)),
+            ("well", (0, 200, 200)),
             ("hand", (255, 255, 255)),
         ],
     ),
