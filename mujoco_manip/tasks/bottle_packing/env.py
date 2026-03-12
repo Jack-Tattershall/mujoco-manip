@@ -322,14 +322,25 @@ class BottlePackingEnv:
             rng = np.random.default_rng()
         self._belt_rng = rng
 
-        # Spawn initial batch onto belt
-        for _ in range(min(MAX_BELT_BOTTLES, len(self._pending_bottles))):
-            self._spawn_next_on_belt()
+        # Spawn initial batch spread across the belt, front to back.
+        # The first bottle (first to arrive) is placed furthest forward,
+        # subsequent ones are evenly spaced behind it.
+        n_initial = min(MAX_BELT_BOTTLES, len(self._pending_bottles))
+        for i in range(n_initial):
+            idx = self._pending_bottles.pop(0)
+            x = BOTTLE_CONVEYOR_START[0] + (n_initial - 1 - i) * CONVEYOR_BOTTLE_SPACING
+            y = BOTTLE_CONVEYOR_START[1]
+            if self._belt_y_noise > 0 and self._belt_rng is not None:
+                y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
+            pos = np.array([x, y, BOTTLE_CONVEYOR_START[2]])
+            self._set_bottle_pose(idx, pos)
+            self._belt_bottle_indices.append(idx)
+            self._freeze_bottle(idx)
 
         mujoco.mj_forward(self.model, self.data)
 
     def _spawn_next_on_belt(self) -> None:
-        """Spawn the next pending bottle at the back of the belt."""
+        """Spawn the next pending bottle behind the last one on the belt."""
         if not self._pending_bottles:
             return
         idx = self._pending_bottles.pop(0)
