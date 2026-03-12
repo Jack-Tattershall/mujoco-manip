@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from mujoco_manip.constants import ACTION_REPEAT
 from mujoco_manip.controller import IKController
 from mujoco_manip.data import SCENE_XML
-from mujoco_manip.env import PickPlaceEnv
-from mujoco_manip.pick_and_place import (
+from mujoco_manip.tasks.pick_and_place.constants import ACTION_REPEAT
+from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv
+from mujoco_manip.tasks.pick_and_place.fsm import (
     GRIPPER_SETTLE_STEPS,
     Phase,
     PickAndPlaceTask,

@@ -10,7 +10,6 @@ import tqdm
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from mujoco_manip.features import DIM_NAMES
 from mujoco_manip.pose_utils import (
     pos_rotmat_to_se3,
     se3_from_pos_quat_g,
@@ -28,7 +27,8 @@ SKIP_KEYS: set[str] = {
     "observation.phase_description",
 }
 
-KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]] = {
+# -- Pick-and-place keypoint / special key config --
+_PP_KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]] = {
     "observation.keypoints_overhead": (
         "observation.images.overhead",
         [
@@ -55,22 +55,48 @@ KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]]
     ),
     "observation.target_obj_keypoints_overhead": (
         "observation.images.overhead",
-        [
-            ("obj", (255, 255, 0)),
-        ],
+        [("obj", (255, 255, 0))],
     ),
     "observation.target_bin_keypoints_overhead": (
         "observation.images.overhead",
-        [
-            ("bin", (0, 255, 255)),
-        ],
+        [("bin", (0, 255, 255))],
     ),
 }
-
-SPECIAL_KEYS: set[str] = {
+_PP_SPECIAL_KEYS: set[str] = {
     "observation.target_bin_onehot",
     "observation.target_obj_onehot",
 }
+
+# -- Bottle-packing keypoint / special key config --
+_BP_KEYPOINT_OVERLAYS: dict[str, tuple[str, list[tuple[str, tuple[int, int, int]]]]] = {
+    "observation.keypoints_overhead": (
+        "observation.images.overhead",
+        [
+            ("bottle", (255, 160, 0)),
+            ("crate", (0, 200, 200)),
+            ("hand", (255, 255, 255)),
+        ],
+    ),
+    "observation.keypoints_wrist": (
+        "observation.images.wrist",
+        [
+            ("bottle", (255, 160, 0)),
+            ("crate", (0, 200, 200)),
+            ("hand", (255, 255, 255)),
+        ],
+    ),
+}
+_BP_SPECIAL_KEYS: set[str] = {
+    "observation.target_well_onehot",
+}
+
+
+def _detect_task(sample: dict) -> str:
+    """Return 'bottle_packing' or 'pick_and_place' based on feature keys."""
+    if "observation.target_well_onehot" in sample:
+        return "bottle_packing"
+    return "pick_and_place"
+
 
 MARKER_RADIUS: int = 4
 
@@ -99,9 +125,24 @@ def visualize_episode(
     """
     rr.init(f"{dataset.repo_id}/episode_{episode_index}", spawn=(save_path is None))
 
-    sample = dataset[0]
-    feature_keys = sorted(k for k in sample if k not in SKIP_KEYS)
+    first_frame = dataset[0]
+    feature_keys = sorted(k for k in first_frame if k not in SKIP_KEYS)
     print(f"Dataset features: {feature_keys}")
+
+    # Auto-detect task and load matching config
+    task = _detect_task(first_frame)
+    print(f"Detected task: {task}")
+
+    if task == "bottle_packing":
+        from mujoco_manip.tasks.bottle_packing.features import DIM_NAMES
+
+        KEYPOINT_OVERLAYS = _BP_KEYPOINT_OVERLAYS
+        SPECIAL_KEYS = _BP_SPECIAL_KEYS
+    else:
+        from mujoco_manip.tasks.pick_and_place.features import DIM_NAMES
+
+        KEYPOINT_OVERLAYS = _PP_KEYPOINT_OVERLAYS
+        SPECIAL_KEYS = _PP_SPECIAL_KEYS
 
     state_abs_trail: list[list[float]] = []
     state_rel_trail: list[list[float]] = []
@@ -109,7 +150,6 @@ def visualize_episode(
     action_rel_trail: list[list[float]] = []
     T_initial: np.ndarray | None = None
 
-    first_frame = dataset[0]
     has_state_pos_quat_g = "observation.state.ee.pos_quat_g" in first_frame
     has_state_rel_pos_quat_g = "observation.state.ee.pos_quat_g_rel" in first_frame
     has_state_rel_pos_rot6d_g = "observation.state.ee.pos_rot6d_g_rel" in first_frame
@@ -124,10 +164,16 @@ def visualize_episode(
         or has_action_rel_pos_rot6d_g
     )
     if has_any_rel:
-        from mujoco_manip.env import PickPlaceEnv
         from mujoco_manip.robot import PandaRobot
 
-        _env = PickPlaceEnv(add_wrist_camera=False)
+        if task == "bottle_packing":
+            from mujoco_manip.tasks.bottle_packing.env import BottlePackingEnv
+
+            _env = BottlePackingEnv(add_wrist_camera=False)
+        else:
+            from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv
+
+            _env = PickPlaceEnv(add_wrist_camera=False)
         _robot = PandaRobot(_env.model, _env.data)
         _env.reset_to_keyframe("scene_start")
         T_initial = pos_rotmat_to_se3(_robot.ee_pos, _robot.ee_xmat)
@@ -238,21 +284,16 @@ def visualize_episode(
                 rr.LineStrips3D([action_rel_trail], colors=[[0, 100, 255]]),
             )
 
-        if "observation.target_bin_onehot" in frame:
-            val = frame["observation.target_bin_onehot"]
-            if isinstance(val, torch.Tensor):
-                val = val.numpy()
-            rr.log("observation/target_bin_onehot", rr.BarChart(val))
+        for skey in SPECIAL_KEYS:
+            if skey in frame:
+                val = frame[skey]
+                if isinstance(val, torch.Tensor):
+                    val = val.numpy()
+                rr.log(skey.replace(".", "/"), rr.BarChart(val))
 
         if "observation.phase_description" in frame:
             phase_val = frame["observation.phase_description"]
             rr.log("phase_description", rr.TextLog(str(phase_val)))
-
-        if "observation.target_obj_onehot" in frame:
-            val = frame["observation.target_obj_onehot"]
-            if isinstance(val, torch.Tensor):
-                val = val.numpy()
-            rr.log("observation/target_obj_onehot", rr.BarChart(val))
 
     if save_path:
         save_path = Path(save_path)

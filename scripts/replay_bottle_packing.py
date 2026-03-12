@@ -1,4 +1,4 @@
-"""Replay recorded dataset actions in MuJoCo to verify correctness."""
+"""Replay recorded bottle-packing dataset actions in MuJoCo to verify correctness."""
 
 import argparse
 import json
@@ -9,14 +9,17 @@ from pathlib import Path
 import numpy as np
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from mujoco_manip.tasks.pick_and_place.constants import ACTION_REPEAT, TASK_SETS
-from mujoco_manip.tasks.pick_and_place.gym_env import PickPlaceGymEnv
+from mujoco_manip.tasks.bottle_packing.constants import (
+    ACTION_REPEAT,
+    TASK_SETS,
+    well_row_col,
+)
+from mujoco_manip.tasks.bottle_packing.gym_env import BottlePackingGymEnv
 
 
 def main() -> None:
-    """Parse CLI args and replay dataset actions in MuJoCo."""
     parser = argparse.ArgumentParser(
-        description="Replay dataset actions in MuJoCo viewer"
+        description="Replay bottle-packing dataset actions in MuJoCo viewer"
     )
     parser.add_argument("--repo-id", type=str, required=True, help="Dataset repo ID")
     parser.add_argument(
@@ -59,66 +62,39 @@ def main() -> None:
         sys.exit(1)
 
     # Derive action_mode from the action key
-    # "action.ee.pos_quat_g" → "ee_pos_quat_g"
     action_mode = args.action_key.replace("action.", "").replace(".", "_")
 
-    # Read generation metadata to restore randomization and task
+    # Read generation metadata to restore task
     metadata_path = dataset_root / "metadata.json"
-    has_randomization = False
-    spawn_x_range = (-0.20, 0.20)
-    spawn_y_range = (0.30, 0.45)
-    episode_seed: int | None = None
-    task: tuple[str, str] | None = None
+    well_index: int = 0
 
     if metadata_path.exists():
         with open(metadata_path) as f:
             metadata = json.load(f)
 
-        # Restore randomization settings
-        episode_seeds = metadata.get("episode_seeds")
-        if episode_seeds and args.episode_index < len(episode_seeds):
-            has_randomization = True
-            episode_seed = episode_seeds[args.episode_index]
-        if "spawn_x_range" in metadata:
-            spawn_x_range = tuple(metadata["spawn_x_range"])
-        if "spawn_y_range" in metadata:
-            spawn_y_range = tuple(metadata["spawn_y_range"])
-
-        # Reconstruct task from metadata
-        meta_task = metadata.get("task")
-        meta_tasks = metadata.get("tasks", "all")
-        if meta_task is not None:
-            task_list = [tuple(meta_task)]
-        elif meta_tasks in TASK_SETS:
-            task_list = TASK_SETS[meta_tasks]
+        meta_well = metadata.get("well_index")
+        meta_wells = metadata.get("wells", "all")
+        if meta_well is not None:
+            well_list = [int(meta_well)]
+        elif meta_wells in TASK_SETS:
+            well_list = TASK_SETS[meta_wells]
         else:
-            task_list = TASK_SETS["all"]
-        task = task_list[args.episode_index % len(task_list)]
+            well_list = TASK_SETS["all"]
+        well_index = well_list[args.episode_index % len(well_list)]
 
-    # Create gym env with human render mode
-    gym_env = PickPlaceGymEnv(
+    gym_env = BottlePackingGymEnv(
         action_mode=action_mode,
         render_mode="human",
         reward_type="staged",
-        randomize_objects=has_randomization,
-        spawn_x_range=spawn_x_range,
-        spawn_y_range=spawn_y_range,
     )
 
-    reset_kwargs: dict = {}
-    if episode_seed is not None:
-        reset_kwargs["seed"] = episode_seed
-    if task is not None:
-        reset_kwargs["options"] = {"task": task}
-    obs, info = gym_env.reset(**reset_kwargs)
+    obs, info = gym_env.reset(options={"well_index": well_index})
 
-    if has_randomization:
-        print(f"Restored object randomization for episode {args.episode_index}")
-    if task is not None:
-        print(f"Task: {task[0]} → {task[1]}")
+    row, col = well_row_col(well_index)
+    print(f"Target well: ({row},{col}) [index {well_index}]")
 
     step_time: float = (
-        gym_env.pick_place_env.model.opt.timestep * ACTION_REPEAT * args.slow
+        gym_env.bottle_packing_env.model.opt.timestep * ACTION_REPEAT * args.slow
     )
 
     print(f"\nReplaying {num_frames} frames (ACTION_REPEAT={ACTION_REPEAT})...")
@@ -126,7 +102,7 @@ def main() -> None:
     print("-" * 82)
 
     for i in range(num_frames):
-        if not gym_env.pick_place_env.is_running():
+        if not gym_env.bottle_packing_env.is_running():
             print("\nViewer closed.")
             break
 
@@ -137,7 +113,6 @@ def main() -> None:
         obs, reward, terminated, truncated, info = gym_env.step(action)
         gym_env.render()
 
-        # Compute target position for error reporting
         target_xyz, _ = gym_env.decode_action(action)
         ee_pos: np.ndarray = gym_env.robot.ee_pos
         err: float = float(np.linalg.norm(ee_pos - target_xyz))
@@ -153,8 +128,8 @@ def main() -> None:
             time.sleep(sleep_time)
 
     print("\nReplay finished. Viewer remains open — close window to exit.")
-    while gym_env.pick_place_env.is_running():
-        gym_env.pick_place_env.sync()
+    while gym_env.bottle_packing_env.is_running():
+        gym_env.bottle_packing_env.sync()
         time.sleep(0.05)
 
     gym_env.close()

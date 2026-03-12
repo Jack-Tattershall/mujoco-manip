@@ -1,16 +1,21 @@
 """Camera rendering and 3D-to-2D keypoint projection."""
 
+from typing import Sequence
+
 import mujoco
 import numpy as np
 
-from .constants import IMAGE_SIZE, KEYPOINT_BODIES
+_DEFAULT_IMAGE_SIZE = 224
 
 
 class CameraRenderer:
     """Wraps mujoco.Renderer for offscreen image rendering."""
 
     def __init__(
-        self, model: mujoco.MjModel, height: int = IMAGE_SIZE, width: int = IMAGE_SIZE
+        self,
+        model: mujoco.MjModel,
+        height: int = _DEFAULT_IMAGE_SIZE,
+        width: int = _DEFAULT_IMAGE_SIZE,
     ) -> None:
         """Initialise the renderer.
 
@@ -58,7 +63,7 @@ def project_3d_to_2d(
     data: mujoco.MjData,
     camera_name: str,
     points_3d: np.ndarray,
-    image_size: int = IMAGE_SIZE,
+    image_size: int = _DEFAULT_IMAGE_SIZE,
 ) -> np.ndarray:
     """Project (N, 3) world points to (N, 2) normalised [0, 1] pixel coordinates.
 
@@ -108,23 +113,25 @@ def compute_keypoints(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     camera_name: str,
-    image_size: int = IMAGE_SIZE,
+    keypoint_bodies: Sequence[str],
+    image_size: int = _DEFAULT_IMAGE_SIZE,
 ) -> np.ndarray:
-    """Project all KEYPOINT_BODIES to normalised pixel coordinates.
+    """Project keypoint bodies to normalised pixel coordinates.
 
     Args:
         model: MuJoCo model.
         data: MuJoCo data.
         camera_name: Name of the camera defined in the MJCF.
+        keypoint_bodies: Sequence of body names to project.
         image_size: Image resolution (square).
 
     Returns:
-        Normalised pixel coordinates, shape (7, 2), dtype float32.
+        Normalised pixel coordinates, shape (N, 2), dtype float32.
     """
     points_3d = np.array(
         [
             data.xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)]
-            for name in KEYPOINT_BODIES
+            for name in keypoint_bodies
         ]
     )
     return project_3d_to_2d(model, data, camera_name, points_3d, image_size)

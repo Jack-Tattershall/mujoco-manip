@@ -4,9 +4,10 @@ from enum import Enum, auto
 
 import numpy as np
 
+from mujoco_manip.controller import IKController
+from mujoco_manip.robot import PandaRobot
+
 from .env import PickPlaceEnv
-from .robot import PandaRobot
-from .controller import IKController
 
 
 class State(Enum):

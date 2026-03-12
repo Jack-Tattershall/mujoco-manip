@@ -21,7 +21,7 @@ _PROJECT_ROOT = os.path.dirname(_SCRIPT_DIR)
 sys.path.insert(0, _PROJECT_ROOT)
 
 from mujoco_manip.data import SCENE_XML  # noqa: E402
-from mujoco_manip.env import PickPlaceEnv  # noqa: E402
+from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv  # noqa: E402
 
 IMAGE_SIZE = 480
 

@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from mujoco_manip.data import SCENE_XML
-from mujoco_manip.env import PickPlaceEnv
-from mujoco_manip.randomization import (
+from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv
+from mujoco_manip.tasks.pick_and_place.randomization import (
     MIN_OBJ_SEPARATION,
     OBJ_JOINT_NAMES,
     randomize_object_positions,

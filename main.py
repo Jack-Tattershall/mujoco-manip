@@ -5,10 +5,10 @@ import time
 
 import numpy as np
 
-from mujoco_manip.env import PickPlaceEnv
-from mujoco_manip.robot import PandaRobot
 from mujoco_manip.controller import IKController
-from mujoco_manip.pick_and_place import PickAndPlaceTask
+from mujoco_manip.robot import PandaRobot
+from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv
+from mujoco_manip.tasks.pick_and_place.fsm import PickAndPlaceTask
 
 
 def main() -> None:

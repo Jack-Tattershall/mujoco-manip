@@ -5,8 +5,8 @@ import pytest
 
 from mujoco_manip.controller import IKController, TARGET_ORI
 from mujoco_manip.data import SCENE_XML
-from mujoco_manip.env import PickPlaceEnv
 from mujoco_manip.robot import PandaRobot
+from mujoco_manip.tasks.pick_and_place.env import PickPlaceEnv
 
 
 @pytest.fixture
