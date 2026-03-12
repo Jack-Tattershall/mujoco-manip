@@ -14,7 +14,7 @@ WELL_SPACING = 0.055
 CRATE_POS = np.array([0.25, 0.40, 0.24])
 
 # Bottle pickup position (conveyor end, world frame)
-BOTTLE_PICKUP_POS = np.array([0.0, 0.40, 0.28])
+BOTTLE_PICKUP_POS = np.array([-0.05, 0.40, 0.28])
 
 # Bottle start position — front of the queue at the far end of belt.
 BOTTLE_CONVEYOR_START = np.array([-0.40, 0.40, 0.28])

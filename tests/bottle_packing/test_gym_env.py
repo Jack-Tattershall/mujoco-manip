@@ -383,6 +383,24 @@ class TestStagedReward:
         reward, _ = staged_env._compute_reward()
         assert 0.0 <= reward < 1.0
 
+    def test_reward_monotonic_on_approach(self, staged_env):
+        """Reward must never decrease when approaching the bottle."""
+        staged_env.reset()
+        bottle_pos = staged_env.bottle_packing_env.get_body_pos(
+            staged_env.bottle_packing_env.active_bottle_body
+        )
+
+        prev_r = -1.0
+        for _ in range(15):
+            target = np.array(
+                [bottle_pos[0], bottle_pos[1], 0.46, 1.0], dtype=np.float32
+            )
+            _, r, term, trunc, _ = staged_env.step(target)
+            if term and r < 0:
+                break  # collision ends test
+            assert r >= prev_r, f"Reward decreased: {r} < {prev_r}"
+            prev_r = r
+
     def test_sticky_flags_reset(self, staged_env):
         staged_env.reset()
         assert staged_env._has_grasped is False
