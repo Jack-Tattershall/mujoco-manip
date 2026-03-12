@@ -310,7 +310,7 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.push_to_hub:
         print(f"\nPushing to HF Hub: {cfg.repo_id} (private={cfg.private})...")
-        dataset.push_to_hub(private=cfg.private, upload_large_folder=True)
+        dataset.push_to_hub(private=cfg.private)
         print("Push complete.")
 
 
