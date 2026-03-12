@@ -220,6 +220,7 @@
                     <geom mesh="link7_c" class="collision"/>
                     <body name="hand" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834">
                       <inertial mass="0.73" pos="-0.01 0 0.03" diaginertia="0.001 0.0025 0.0017"/>
+                      <site name="ee_force_torque_site" pos="0 0 0" size="0.005" rgba="1 0 0 0"/>
                       <geom mesh="hand_0" material="off_white" class="visual"/>
                       <geom mesh="hand_1" material="black" class="visual"/>
                       <geom mesh="hand_2" material="black" class="visual"/>
@@ -291,6 +292,11 @@
   <keyframe>
     <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04" ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 255"/>
   </keyframe>
+
+  <sensor>
+    <force name="ee_force" site="ee_force_torque_site"/>
+    <torque name="ee_torque" site="ee_force_torque_site"/>
+  </sensor>
 
   <contact>
     <exclude body1="link0" body2="link1"/>

@@ -190,6 +190,9 @@ class BottlePackingGymEnv(gym.Env):
                 "target_well_keypoints_overhead": spaces.Box(
                     0.0, 1.0, (2,), dtype=np.float32
                 ),
+                "state.ee.force_torque": spaces.Box(
+                    -np.inf, np.inf, (6,), dtype=np.float32
+                ),
             }
         )
 
@@ -310,6 +313,7 @@ class BottlePackingGymEnv(gym.Env):
             "state.ee.pos_rot6d_g": state_pos_rot6d_g,
             "state.ee.pos_quat_g_rel": state_pos_quat_g_rel,
             "state.ee.pos_rot6d_g_rel": state_pos_rot6d_g_rel,
+            "state.ee.force_torque": self._robot.ee_force_torque,
             "target_well_onehot": well_onehot,
             "keypoints_overhead": kp_overhead,
             "keypoints_wrist": kp_wrist,

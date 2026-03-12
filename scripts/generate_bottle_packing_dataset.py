@@ -41,6 +41,7 @@ _OBS_TO_FEATURE = {
     "target_well_onehot": "observation.target_well_onehot",
     "target_bottle_keypoints_overhead": "observation.target_bottle_keypoints_overhead",
     "target_well_keypoints_overhead": "observation.target_well_keypoints_overhead",
+    "state.ee.force_torque": "observation.state.ee.force_torque",
 }
 
 

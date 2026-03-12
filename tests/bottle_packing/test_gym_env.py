@@ -120,6 +120,7 @@ class TestConstruction:
             "keypoints_wrist",
             "target_bottle_keypoints_overhead",
             "target_well_keypoints_overhead",
+            "state.ee.force_torque",
         }
         assert set(env.observation_space.spaces.keys()) == expected
 
@@ -149,6 +150,7 @@ class TestReset:
         assert obs["keypoints_wrist"].shape == (3, 2)
         assert obs["target_bottle_keypoints_overhead"].shape == (2,)
         assert obs["target_well_keypoints_overhead"].shape == (2,)
+        assert obs["state.ee.force_torque"].shape == (6,)
 
     def test_obs_dtypes(self, env):
         obs, _ = env.reset()
@@ -156,6 +158,7 @@ class TestReset:
         assert obs["image_wrist"].dtype == np.uint8
         assert obs["state"].dtype == np.float32
         assert obs["target_well_onehot"].dtype == np.float32
+        assert obs["state.ee.force_torque"].dtype == np.float32
 
     def test_well_onehot_valid(self, env):
         obs, _ = env.reset()

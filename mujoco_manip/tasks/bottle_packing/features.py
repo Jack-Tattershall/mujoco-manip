@@ -41,6 +41,11 @@ FEATURES = {
         "shape": (10,),
         "names": None,
     },
+    "observation.state.ee.force_torque": {
+        "dtype": "float32",
+        "shape": (6,),
+        "names": None,
+    },
     "action.ee.pos_quat_g": {
         "dtype": "float32",
         "shape": (8,),
@@ -156,6 +161,7 @@ DIM_NAMES: dict[str, list[str]] = {
         "r23",
         "gripper",
     ],
+    "observation.state.ee.force_torque": ["fx", "fy", "fz", "tx", "ty", "tz"],
     "action.ee.pos_quat_g": ["x", "y", "z", "qx", "qy", "qz", "qw", "gripper"],
     "action.ee.pos_rot6d_g": [
         "x",

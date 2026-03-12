@@ -126,8 +126,11 @@ def main() -> None:
     )
 
     print(f"\nReplaying {num_frames} frames (ACTION_REPEAT={ACTION_REPEAT})...")
-    print(f"{'Frame':>6}  {'Action XYZ':>30}  {'EE XYZ':>30}  {'Error':>8}")
-    print("-" * 82)
+    print(
+        f"{'Frame':>6}  {'Action XYZ':>30}  {'EE XYZ':>30}  {'Error':>8}"
+        f"  {'F/T (fx fy fz tx ty tz)':>50}"
+    )
+    print("-" * 134)
 
     for i in range(num_frames):
         if not gym_env.bottle_packing_env.is_running():
@@ -144,10 +147,13 @@ def main() -> None:
         target_xyz, _ = gym_env.decode_action(action)
         ee_pos: np.ndarray = gym_env.robot.ee_pos
         err: float = float(np.linalg.norm(ee_pos - target_xyz))
+        ft: np.ndarray = obs["state.ee.force_torque"]
         print(
             f"{i:>6}  {target_xyz[0]:>9.4f} {target_xyz[1]:>9.4f} {target_xyz[2]:>9.4f}"
             f"  {ee_pos[0]:>9.4f} {ee_pos[1]:>9.4f} {ee_pos[2]:>9.4f}"
             f"  {err:>8.4f}"
+            f"  {ft[0]:>7.3f} {ft[1]:>7.3f} {ft[2]:>7.3f}"
+            f" {ft[3]:>7.4f} {ft[4]:>7.4f} {ft[5]:>7.4f}"
         )
 
         elapsed: float = time.monotonic() - t_start
