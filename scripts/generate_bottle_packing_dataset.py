@@ -96,6 +96,7 @@ def run_episode(
     packed: dict[int, int],
     feature_keys: set[str],
     reward_type: str = "staged",
+    seed: int | None = None,
 ) -> list[dict]:
     """Run one expert FSM episode and collect frames.
 
@@ -106,13 +107,15 @@ def run_episode(
         packed: Mapping of already-packed ``bottle_idx → well_idx``.
         feature_keys: Which dataset features to record.
         reward_type: Reward scheme.
+        seed: Random seed for the gym env reset (controls belt Y noise).
     """
     obs, info = gym_env.reset(
+        seed=seed,
         options={
             "well_index": well_index,
             "bottle_index": bottle_index,
             "packed": packed,
-        }
+        },
     )
 
     fsm = BottlePackingTask(
@@ -246,6 +249,8 @@ def main(cfg: DictConfig) -> None:
     )
 
     rng = random.Random(cfg.seed)
+    # Per-episode seeds for reproducible belt Y noise
+    ep_seeds = np.random.SeedSequence(cfg.seed).spawn(cfg.num_episodes)
     total_episodes = 0
 
     print(f"Task: {task}, {num_bottles} bottles/run, {cfg.num_episodes} episodes")
@@ -270,6 +275,7 @@ def main(cfg: DictConfig) -> None:
             flush=True,
         )
 
+        ep_seed = int(ep_seeds[ep_idx].generate_state(1)[0])
         frames = run_episode(
             gym_env,
             bottle_index=bottle_idx,
@@ -277,6 +283,7 @@ def main(cfg: DictConfig) -> None:
             packed=packed,
             feature_keys=feature_keys,
             reward_type=cfg.reward_type,
+            seed=ep_seed,
         )
 
         for frame in frames:

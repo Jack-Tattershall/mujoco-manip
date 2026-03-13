@@ -229,13 +229,14 @@ class BottlePackingEnv:
         self._freeze_inactive_bottles()
         mujoco.mj_forward(self.model, self.data)
 
-    def spawn_bottle_on_conveyor(self, bottle_idx: int) -> None:
+    def spawn_bottle_on_conveyor(self, bottle_idx: int, y_offset: float = 0.0) -> None:
         """Place a single bottle at the conveyor start and set it as active.
 
         Freezes all other bottles and unfreezes the new one.
 
         Args:
             bottle_idx: Bottle index (0–19) to spawn.
+            y_offset: Lateral offset from belt centre (metres).
         """
         self._active_bottle = bottle_idx
         self._belt_bottle_indices = [bottle_idx]
@@ -243,7 +244,9 @@ class BottlePackingEnv:
         # Freeze everything, then unfreeze only the active bottle
         self._freeze_inactive_bottles()
         self._unfreeze_bottle(bottle_idx)
-        self._set_bottle_pose(bottle_idx, BOTTLE_CONVEYOR_START.copy())
+        start = BOTTLE_CONVEYOR_START.copy()
+        start[1] += y_offset
+        self._set_bottle_pose(bottle_idx, start)
         mujoco.mj_forward(self.model, self.data)
 
     def setup_bottles(self, target_well: int) -> None:

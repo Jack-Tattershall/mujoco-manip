@@ -102,6 +102,9 @@ def main() -> None:
     for i in range(step_in_run):
         packed[i] = well_schedule[i]
 
+    # Reconstruct per-episode seed for reproducible belt Y noise
+    ep_seed = int(np.random.SeedSequence(seed).spawn(ep + 1)[ep].generate_state(1)[0])
+
     gym_env = BottlePackingGymEnv(
         action_mode=action_mode,
         render_mode="human",
@@ -109,11 +112,12 @@ def main() -> None:
     )
 
     obs, info = gym_env.reset(
+        seed=ep_seed,
         options={
             "well_index": well_index,
             "bottle_index": bottle_index,
             "packed": packed,
-        }
+        },
     )
 
     row, col = well_row_col(well_index)

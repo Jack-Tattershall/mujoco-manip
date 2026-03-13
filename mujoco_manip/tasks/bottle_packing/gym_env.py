@@ -19,6 +19,7 @@ from mujoco_manip.robot import PandaRobot
 
 from .constants import (
     ACTION_REPEAT,
+    BELT_Y_NOISE,
     BOTTLE_BODIES,
     IMAGE_SIZE,
     MAX_EPISODE_STEPS,
@@ -66,6 +67,7 @@ class BottlePackingGymEnv(gym.Env):
         image_size: int = IMAGE_SIZE,
         render_mode: str = "rgb_array",
         max_episode_steps: int = MAX_EPISODE_STEPS,
+        belt_y_noise: float = BELT_Y_NOISE,
     ) -> None:
         """Initialise the environment.
 
@@ -79,6 +81,8 @@ class BottlePackingGymEnv(gym.Env):
             image_size: Resolution for camera rendering.
             render_mode: Gymnasium render mode.
             max_episode_steps: Truncation limit.
+            belt_y_noise: Half-range of uniform Y offset for bottle spawn
+                on the conveyor belt (metres). Set to 0 to disable.
         """
         super().__init__()
         if action_mode not in ACTION_MODES:
@@ -97,6 +101,7 @@ class BottlePackingGymEnv(gym.Env):
         self._image_size = image_size
         self.render_mode = render_mode
         self._max_episode_steps = max_episode_steps
+        self._belt_y_noise = belt_y_noise
         self._step_count = 0
 
         self._env = BottlePackingEnv(xml_path, add_wrist_camera=True)
@@ -493,8 +498,13 @@ class BottlePackingGymEnv(gym.Env):
         # Capture initial EE pose BEFORE conveyor animation (robot at home)
         self._capture_initial_pose()
 
-        # Spawn active bottle on conveyor and deliver to pickup
-        self._env.spawn_bottle_on_conveyor(bottle_index)
+        # Spawn active bottle on conveyor with optional lateral noise
+        y_offset = 0.0
+        if self._belt_y_noise > 0:
+            y_offset = float(
+                self.np_random.uniform(-self._belt_y_noise, self._belt_y_noise)
+            )
+        self._env.spawn_bottle_on_conveyor(bottle_index, y_offset=y_offset)
         self._env.animate_conveyor()
 
         model, data = self._env.model, self._env.data
