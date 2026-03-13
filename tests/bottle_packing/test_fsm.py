@@ -8,7 +8,7 @@ from mujoco_manip.robot import PandaRobot
 from mujoco_manip.tasks.bottle_packing.constants import ACTION_REPEAT
 from mujoco_manip.tasks.bottle_packing.env import BottlePackingEnv
 from mujoco_manip.tasks.bottle_packing.fsm import (
-    GRIPPER_SETTLE_STEPS,
+    GRIPPER_CLOSE_STEPS,
     Phase,
     State,
     BottlePackingTask,
@@ -21,8 +21,7 @@ def sim():
     env = BottlePackingEnv(add_wrist_camera=False)
     env.reset_to_keyframe("scene_start")
     env.setup_scene(num_prepacked=0)
-    env.spawn_bottle_on_conveyor(0)
-    env.animate_conveyor()
+    env.spawn_bottle_at_pickup(0)
     robot = PandaRobot(env.model, env.data)
     ctrl = IKController(env.model, env.data, robot)
     return env, robot, ctrl
@@ -115,10 +114,10 @@ class TestGripperVal:
         assert task.gripper_val == 0.0
 
     def test_opens_on_release_state(self, task, sim):
-        task.state = State.LOWER_TO_WELL
-        task._target_pos = np.array([0.0, 0.0, 0.44])
-        task.controller._pos_tolerance = 999.0
-        task.plan()  # → RELEASE
+        task.state = State.RELEASE
+        task._target_pos = np.array([0.0, 0.0, 0.42])
+        task.settle_counter = 1
+        task.plan()  # ramp finishes → RELEASE_WAIT, gripper fully open
         assert task.gripper_val == 1.0
 
 
@@ -130,10 +129,10 @@ class TestGripperVal:
 class TestPlanNSteps:
     def test_settle_counter_decrements(self, task):
         task.state = State.CLOSE_GRIPPER
-        task.settle_counter = GRIPPER_SETTLE_STEPS
+        task.settle_counter = GRIPPER_CLOSE_STEPS
         task._target_pos = np.array([0, 0, 0.5])
         task.plan(n_steps=ACTION_REPEAT)
-        assert task.settle_counter == GRIPPER_SETTLE_STEPS - ACTION_REPEAT
+        assert task.settle_counter == GRIPPER_CLOSE_STEPS - ACTION_REPEAT
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +143,7 @@ class TestPlanNSteps:
 class TestFSMCompletion:
     def test_plan_actuate_completes(self, task, sim):
         env, robot, ctrl = sim
-        for _ in range(20000):
+        for _ in range(30000):
             task.plan(ACTION_REPEAT)
             task._actuate()
             for _ in range(ACTION_REPEAT):
@@ -156,7 +155,7 @@ class TestFSMCompletion:
     def test_phase_progresses(self, task, sim):
         env, robot, ctrl = sim
         seen_phases = set()
-        for _ in range(20000):
+        for _ in range(30000):
             task.plan(ACTION_REPEAT)
             task._actuate()
             for _ in range(ACTION_REPEAT):

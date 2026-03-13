@@ -21,10 +21,13 @@ from .constants import (
     ACTION_REPEAT,
     BELT_Y_NOISE,
     BOTTLE_BODIES,
+    BOTTLE_HALF_HEIGHT,
+    CONVEYOR_RESUME_Z,
     IMAGE_SIZE,
     MAX_EPISODE_STEPS,
     NUM_WELLS,
     TASK_SETS,
+    WELL_WALL_HEIGHT,
     well_position,
 )
 from .env import BottlePackingEnv
@@ -36,6 +39,16 @@ ACTION_MODES = (
     "ee_pos_quat_g_rel",
     "ee_pos_rot6d_g_rel",
 )
+
+# Staged reward thresholds
+_REWARD_D_MAX = 0.5  # max distance for normalised distance rewards
+_REWARD_GRASP_Z = 0.35  # bottle z threshold for grasp detection
+_REWARD_LIFT_Z = 0.42  # bottle z threshold for lift detection
+_REWARD_ABOVE_XY = 0.04  # XY distance threshold for "above target"
+_REWARD_PLACED_Z = 0.04  # Z tolerance above well target for placement
+_REWARD_HOME_DIST = 0.05  # EE distance to home for completion
+_REWARD_LIFT_FLOOR_Z = 0.30  # z floor for normalising lift progress
+_REWARD_DESCENT_RANGE = 0.25  # max height-above-well for descent reward
 
 
 class BottlePackingGymEnv(gym.Env):
@@ -103,6 +116,7 @@ class BottlePackingGymEnv(gym.Env):
         self._max_episode_steps = max_episode_steps
         self._belt_y_noise = belt_y_noise
         self._step_count = 0
+        self._conveyor_resumed = False
 
         self._env = BottlePackingEnv(xml_path, add_wrist_camera=True)
         self._env.colorize_bottles()
@@ -115,31 +129,38 @@ class BottlePackingGymEnv(gym.Env):
         self._target_bottle_kp_overhead: np.ndarray | None = None
         self._target_well_kp_overhead: np.ndarray | None = None
 
+        # Peak insertion force (max positive Fz over episode)
+        self._peak_fz: float = 0.0
+
         # Staged reward state
         self._has_grasped = False
         self._has_lifted = False
         self._above_target = False
         self._has_placed = False
         self._reward_hwm: np.ndarray | None = None
-        self._robot_geom_ids: set[int] = set()
-        self._obstacle_geom_ids: set[int] = set()
+        self._robot_geom_ids: frozenset[int] = frozenset()
+        self._obstacle_geom_ids: frozenset[int] = frozenset()
 
         if reward_type == "staged":
             robot_bodies = self._robot.BODY_NAMES
             bottle_body_set = set(BOTTLE_BODIES)
+            robot_ids: set[int] = set()
+            obstacle_ids: set[int] = set()
             for i in range(self._env.model.ngeom):
                 body_id = self._env.model.geom_bodyid[i]
                 body_name = mujoco.mj_id2name(
                     self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
                 )
                 if body_name in robot_bodies:
-                    self._robot_geom_ids.add(i)
+                    robot_ids.add(i)
                 elif (
                     body_name
                     and body_name != "world"
                     and body_name not in bottle_body_set
                 ):
-                    self._obstacle_geom_ids.add(i)
+                    obstacle_ids.add(i)
+            self._robot_geom_ids = frozenset(robot_ids)
+            self._obstacle_geom_ids = frozenset(obstacle_ids)
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -271,8 +292,9 @@ class BottlePackingGymEnv(gym.Env):
             [self._env.active_bottle_body, "hand"],
             self._image_size,
         )
-        # Target well from computed world position
-        well_pos = well_position(self._well_index)
+        # Target well from computed world position (top of well opening)
+        well_pos = well_position(self._well_index).copy()
+        well_pos[2] += WELL_WALL_HEIGHT
         well_kp = project_3d_to_2d(
             model, data, camera_name, well_pos[np.newaxis], self._image_size
         )
@@ -326,6 +348,17 @@ class BottlePackingGymEnv(gym.Env):
             "target_well_keypoints_overhead": self._target_well_kp_overhead,
         }
 
+    def _check_placement_success(self) -> bool:
+        """Return True if the active bottle is placed in the target well."""
+        bottle_pos = self._env.get_body_pos(self._env.active_bottle_body)
+        well_pos_3d = well_position(self._well_index)
+        well_target_z = well_pos_3d[2] + BOTTLE_HALF_HEIGHT
+        xy_dist = np.linalg.norm(bottle_pos[:2] - well_pos_3d[:2])
+        return (
+            xy_dist < _REWARD_ABOVE_XY
+            and bottle_pos[2] < well_target_z + _REWARD_PLACED_Z
+        )
+
     def _check_robot_collision(self) -> bool:
         for i in range(self._env.data.ncon):
             c = self._env.data.contact[i]
@@ -342,34 +375,28 @@ class BottlePackingGymEnv(gym.Env):
         Phases: reach_bottle -> pick_bottle -> reach_well -> place_bottle ->
         reach_home.  Each contributes [0, 0.2] for a total range of [0, 1].
         """
-        D_MAX = 0.5
-        GRASP_Z = 0.35
-        LIFT_Z = 0.42
-
         bottle_pos = self._env.get_body_pos(self._env.active_bottle_body)
         well_pos_3d = well_position(self._well_index)
-        # Target XY is well center; target Z is well floor + bottle half-height
-        well_target = np.array([well_pos_3d[0], well_pos_3d[1], well_pos_3d[2] + 0.04])
+        well_target_z = well_pos_3d[2] + BOTTLE_HALF_HEIGHT
         ee_pos = self._robot.ee_pos
         gripper_closed = self._robot.gripper_ctrl == PandaRobot.GRIPPER_CLOSED
 
         # Sticky phase transitions
-        if not self._has_grasped and bottle_pos[2] > GRASP_Z and gripper_closed:
+        if not self._has_grasped and bottle_pos[2] > _REWARD_GRASP_Z and gripper_closed:
             self._has_grasped = True
-        if not self._has_lifted and bottle_pos[2] > LIFT_Z and gripper_closed:
+        if not self._has_lifted and bottle_pos[2] > _REWARD_LIFT_Z and gripper_closed:
             self._has_lifted = True
-        xy_dist = np.linalg.norm(bottle_pos[:2] - well_target[:2])
-        if not self._above_target and self._has_lifted and xy_dist < 0.04:
+        xy_dist = np.linalg.norm(bottle_pos[:2] - well_pos_3d[:2])
+        if not self._above_target and self._has_lifted and xy_dist < _REWARD_ABOVE_XY:
             self._above_target = True
-        placed = xy_dist < 0.04 and bottle_pos[2] < well_target[2] + 0.04
-        if not self._has_placed and placed:
+        if not self._has_placed and self._check_placement_success():
             self._has_placed = True
 
         # Phase 1: reach bottle
         if self._has_grasped:
             r0 = 1.0
         else:
-            r0 = 1.0 - min(np.linalg.norm(ee_pos - bottle_pos) / D_MAX, 1.0)
+            r0 = 1.0 - min(np.linalg.norm(ee_pos - bottle_pos) / _REWARD_D_MAX, 1.0)
 
         # Phase 2: pick bottle
         if not self._has_grasped:
@@ -377,7 +404,14 @@ class BottlePackingGymEnv(gym.Env):
         elif self._has_lifted:
             r1 = 1.0
         else:
-            r1 = max(0.0, min((bottle_pos[2] - 0.30) / (LIFT_Z - 0.30), 1.0))
+            r1 = max(
+                0.0,
+                min(
+                    (bottle_pos[2] - _REWARD_LIFT_FLOOR_Z)
+                    / (_REWARD_LIFT_Z - _REWARD_LIFT_FLOOR_Z),
+                    1.0,
+                ),
+            )
 
         # Phase 3: reach well
         if not self._has_lifted:
@@ -385,7 +419,7 @@ class BottlePackingGymEnv(gym.Env):
         elif self._above_target:
             r2 = 1.0
         else:
-            r2 = 1.0 - min(xy_dist / D_MAX, 1.0)
+            r2 = 1.0 - min(xy_dist / _REWARD_D_MAX, 1.0)
 
         # Phase 4: place bottle
         if not self._above_target:
@@ -393,8 +427,8 @@ class BottlePackingGymEnv(gym.Env):
         elif self._has_placed:
             r3 = 1.0
         else:
-            height_above = bottle_pos[2] - well_target[2]
-            r3 = 1.0 - max(0.0, min(height_above / 0.25, 1.0))
+            height_above = bottle_pos[2] - well_target_z
+            r3 = 1.0 - max(0.0, min(height_above / _REWARD_DESCENT_RANGE, 1.0))
 
         # Phase 5: reach home
         if not self._has_placed:
@@ -402,7 +436,11 @@ class BottlePackingGymEnv(gym.Env):
         else:
             init_ee_pos = self._initial_ee_se3[:3, 3]
             dist = np.linalg.norm(ee_pos - init_ee_pos)
-            r4 = 1.0 if dist < 0.05 else 1.0 - min(dist / D_MAX, 1.0)
+            r4 = (
+                1.0
+                if dist < _REWARD_HOME_DIST
+                else 1.0 - min(dist / _REWARD_D_MAX, 1.0)
+            )
 
         components = np.array([r0, r1, r2, r3, r4])
         if self._reward_hwm is None:
@@ -417,26 +455,27 @@ class BottlePackingGymEnv(gym.Env):
         return reward, done
 
     def _compute_reward(self) -> tuple[float, bool]:
-        bottle_pos = self._env.get_body_pos(self._env.active_bottle_body)
-        well_pos_3d = well_position(self._well_index)
-        well_target = np.array([well_pos_3d[0], well_pos_3d[1], well_pos_3d[2] + 0.04])
-        ee_pos = self._robot.ee_pos
+        if self._reward_type == "staged":
+            return self._compute_staged_reward()
 
-        xy_dist = np.linalg.norm(bottle_pos[:2] - well_target[:2])
-        success = xy_dist < 0.04 and bottle_pos[2] < well_target[2] + 0.04
+        success = self._check_placement_success()
 
         if self._reward_type == "sparse":
             return (1.0 if success else 0.0), success
 
-        if self._reward_type == "staged":
-            return self._compute_staged_reward()
-
         # Dense reward
+        bottle_pos = self._env.get_body_pos(self._env.active_bottle_body)
+        well_pos_3d = well_position(self._well_index)
+        well_target = np.array(
+            [well_pos_3d[0], well_pos_3d[1], well_pos_3d[2] + BOTTLE_HALF_HEIGHT]
+        )
+        ee_pos = self._robot.ee_pos
+
         reward = 0.0
         dist_ee_bottle = np.linalg.norm(ee_pos - bottle_pos)
         reward -= dist_ee_bottle
 
-        if bottle_pos[2] > 0.30:
+        if bottle_pos[2] > _REWARD_LIFT_FLOOR_Z:
             reward += 2.0
             dist_bottle_well = np.linalg.norm(bottle_pos - well_target)
             reward -= dist_bottle_well
@@ -463,12 +502,16 @@ class BottlePackingGymEnv(gym.Env):
                     ``well_index`` for sequential, must be set for random).
                 ``"packed"`` — dict mapping ``bottle_idx → well_idx`` for
                     bottles already packed in wells from prior episodes.
+                ``"belt_bottles"`` — explicit list of bottle indices to
+                    place on the belt behind the active bottle.
         """
         super().reset(seed=seed)
 
         self._env.reset_to_keyframe("scene_start")
         self._step_count = 0
+        self._conveyor_resumed = False
 
+        self._peak_fz = 0.0
         self._has_grasped = False
         self._has_lifted = False
         self._above_target = False
@@ -481,8 +524,9 @@ class BottlePackingGymEnv(gym.Env):
         elif self._fixed_well is not None:
             self._well_index = self._fixed_well
         else:
-            self._well_index = int(self.np_random.integers(len(self._well_pool)))
-            self._well_index = self._well_pool[self._well_index]
+            self._well_index = self._well_pool[
+                int(self.np_random.integers(len(self._well_pool)))
+            ]
 
         # Determine bottle index (defaults to well_index for sequential mode)
         bottle_index = (
@@ -495,17 +539,29 @@ class BottlePackingGymEnv(gym.Env):
         packed = options.get("packed") if options else None
         self._env.setup_scene(num_prepacked=self._well_index, packed=packed)
 
-        # Capture initial EE pose BEFORE conveyor animation (robot at home)
+        # Capture initial EE pose BEFORE conveyor (robot at home)
         self._capture_initial_pose()
 
-        # Spawn active bottle on conveyor with optional lateral noise
-        y_offset = 0.0
-        if self._belt_y_noise > 0:
-            y_offset = float(
-                self.np_random.uniform(-self._belt_y_noise, self._belt_y_noise)
-            )
-        self._env.spawn_bottle_on_conveyor(bottle_index, y_offset=y_offset)
-        self._env.animate_conveyor()
+        # Build conveyor queue: active bottle first, then upcoming
+        belt_queue = [bottle_index]
+        upcoming = options.get("belt_bottles") if options else None
+        if upcoming is None:
+            packed_set = set(packed.keys()) if packed else set()
+            upcoming = [
+                i for i in range(NUM_WELLS) if i != bottle_index and i not in packed_set
+            ]
+        belt_queue.extend(upcoming)
+
+        # Load onto conveyor with Y noise and deliver front bottle
+        rng = self.np_random if self._belt_y_noise > 0 else None
+        self._env.load_conveyor(belt_queue, rng=rng, y_noise=self._belt_y_noise)
+
+        # Run conveyor until the active bottle arrives at pickup
+        while self._env.bottle_at_pickup is None:
+            self._env.tick_conveyor()
+
+        # Activate the delivered bottle for the robot to grasp
+        self._env.start_pickup()
 
         model, data = self._env.model, self._env.data
 
@@ -520,9 +576,12 @@ class BottlePackingGymEnv(gym.Env):
         ).flatten()
 
         well_pos_3d = well_position(self._well_index)
-        well_3d = well_pos_3d[np.newaxis]
+        # Project from the top of the well opening (not the floor) so the
+        # keypoint aligns with the visible well centre in the overhead image.
+        well_top = well_pos_3d.copy()
+        well_top[2] += WELL_WALL_HEIGHT
         self._target_well_kp_overhead = project_3d_to_2d(
-            model, data, "overhead", well_3d, self._image_size
+            model, data, "overhead", well_top[np.newaxis], self._image_size
         ).flatten()
 
         obs = self._get_obs()
@@ -543,8 +602,21 @@ class BottlePackingGymEnv(gym.Env):
             q_target = self._controller.compute(ee_target)
             self._robot.set_arm_ctrl(q_target)
             self._env.step()
+            self._env.tick_conveyor()
 
         mujoco.mj_forward(self._env.model, self._env.data)
+
+        # Track peak positive Fz (insertion contact force)
+        fz = float(self._robot.ee_force_torque[2])
+        if fz > self._peak_fz:
+            self._peak_fz = fz
+
+        # Resume belt when bottle is lifted clear of the conveyor
+        if not self._conveyor_resumed:
+            bottle_z = self._env.get_body_pos(self._env.active_bottle_body)[2]
+            if bottle_z > CONVEYOR_RESUME_Z:
+                self._env.resume_conveyor()
+                self._conveyor_resumed = True
 
         self._step_count += 1
         reward, success = self._compute_reward()
@@ -560,6 +632,9 @@ class BottlePackingGymEnv(gym.Env):
             terminated = success
             info = {"success": success}
         truncated = self._step_count >= self._max_episode_steps
+
+        if terminated or truncated:
+            info["peak_insertion_force"] = self._peak_fz
 
         obs = self._get_obs()
         return obs, reward, terminated, truncated, info

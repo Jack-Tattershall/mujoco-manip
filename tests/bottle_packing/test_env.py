@@ -114,6 +114,21 @@ class TestConveyorAnimation:
         pos = env.get_body_pos(BOTTLE_BODIES[0])
         np.testing.assert_allclose(pos[:2], BOTTLE_PICKUP_POS[:2], atol=0.02)
 
+    def test_spawn_bottle_at_pickup(self, env):
+        env.reset_to_keyframe("scene_start")
+        env.setup_scene(num_prepacked=0)
+        env.spawn_bottle_at_pickup(0)
+        pos = env.get_body_pos(BOTTLE_BODIES[0])
+        np.testing.assert_allclose(pos[:2], BOTTLE_PICKUP_POS[:2], atol=0.01)
+
+    def test_spawn_bottle_at_pickup_with_y_offset(self, env):
+        env.reset_to_keyframe("scene_start")
+        env.setup_scene(num_prepacked=0)
+        env.spawn_bottle_at_pickup(0, y_offset=0.02)
+        pos = env.get_body_pos(BOTTLE_BODIES[0])
+        expected_y = BOTTLE_PICKUP_POS[1] + 0.02
+        assert abs(pos[1] - expected_y) < 0.01
+
 
 # ---------------------------------------------------------------------------
 # Conveyor (tick-based)
@@ -143,7 +158,7 @@ class TestTickConveyor:
         env.setup_scene(num_prepacked=0)
         env.load_conveyor([0], y_noise=0)
         arrived = None
-        for _ in range(5000):
+        for _ in range(10000):
             arrived = env.tick_conveyor()
             if arrived is not None:
                 break
@@ -155,7 +170,7 @@ class TestTickConveyor:
         env.reset_to_keyframe("scene_start")
         env.setup_scene(num_prepacked=0)
         env.load_conveyor([0], y_noise=0)
-        for _ in range(5000):
+        for _ in range(10000):
             if env.tick_conveyor() is not None:
                 break
         idx = env.start_pickup()
@@ -167,7 +182,7 @@ class TestTickConveyor:
         env.setup_scene(num_prepacked=0)
         env.load_conveyor([0, 1], y_noise=0)
         # Deliver first bottle
-        for _ in range(5000):
+        for _ in range(10000):
             if env.tick_conveyor() is not None:
                 break
         assert env.conveyor_stopped
@@ -181,13 +196,25 @@ class TestTickConveyor:
         env.animate_conveyor()
         # After marking as packed, bottle should be frozen
         env.mark_bottle_packed(0)
-        gid = env._bottle_geom_ids[0]
-        assert env.model.geom_contype[gid] == 0  # frozen
+        for gid in env._bottle_geom_ids[0]:
+            assert env.model.geom_contype[gid] == 0  # frozen
 
 
 # ---------------------------------------------------------------------------
 # Body queries
 # ---------------------------------------------------------------------------
+
+
+class TestCrateDisplacement:
+    def test_shape_and_dtype(self, env):
+        env.reset_to_keyframe("scene_start")
+        d = env.crate_displacement
+        assert d.shape == (3,)
+        assert d.dtype == np.float64
+
+    def test_starts_at_zero(self, env):
+        env.reset_to_keyframe("scene_start")
+        np.testing.assert_allclose(env.crate_displacement, 0.0, atol=1e-10)
 
 
 class TestBodyQueries:

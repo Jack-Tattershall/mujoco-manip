@@ -97,6 +97,7 @@ def run_episode(
     feature_keys: set[str],
     reward_type: str = "staged",
     seed: int | None = None,
+    belt_bottles: list[int] | None = None,
 ) -> list[dict]:
     """Run one expert FSM episode and collect frames.
 
@@ -108,6 +109,8 @@ def run_episode(
         feature_keys: Which dataset features to record.
         reward_type: Reward scheme.
         seed: Random seed for the gym env reset (controls belt Y noise).
+        belt_bottles: Bottle indices to place on the belt behind the
+            active bottle.  Defaults to all remaining unpacked bottles.
     """
     obs, info = gym_env.reset(
         seed=seed,
@@ -115,6 +118,7 @@ def run_episode(
             "well_index": well_index,
             "bottle_index": bottle_index,
             "packed": packed,
+            "belt_bottles": belt_bottles,
         },
     )
 
@@ -276,6 +280,7 @@ def main(cfg: DictConfig) -> None:
         )
 
         ep_seed = int(ep_seeds[ep_idx].generate_state(1)[0])
+        remaining = list(range(step_in_run + 1, num_bottles))
         frames = run_episode(
             gym_env,
             bottle_index=bottle_idx,
@@ -284,6 +289,7 @@ def main(cfg: DictConfig) -> None:
             feature_keys=feature_keys,
             reward_type=cfg.reward_type,
             seed=ep_seed,
+            belt_bottles=remaining,
         )
 
         for frame in frames:
@@ -305,11 +311,15 @@ def main(cfg: DictConfig) -> None:
 
     try:
         from lerobot.datasets.utils import write_info
-
-        dataset.meta.info["generation_config"] = generation_config
-        write_info(dataset.meta.info, dataset.meta.root)
-    except (ImportError, AttributeError):
+    except ImportError:
         pass
+    else:
+        try:
+            dataset.meta.info["generation_config"] = generation_config
+            write_info(dataset.meta.info, dataset.meta.root)
+        except AttributeError:
+            # Older LeRobot versions may lack dataset.meta
+            pass
 
     dataset.finalize()
     gym_env.close()

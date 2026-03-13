@@ -1,73 +1,14 @@
 """MuJoCo environment wrapper for the pick-and-place scene."""
 
-import os
-import tempfile
-
 import mujoco
 import mujoco.viewer
 import numpy as np
 
 from mujoco_manip.data import PANDA_DIR as _DEFAULT_PANDA_DIR
 from mujoco_manip.data import SCENE_XML as _DEFAULT_SCENE_XML
+from mujoco_manip.scene_loader import load_scene
 
 from .randomization import randomize_object_positions
-
-
-def _load_scene(
-    xml_path: str, panda_dir: str, add_wrist_camera: bool = False
-) -> mujoco.MjModel:
-    """Load the scene XML, resolving robot meshes from *panda_dir*.
-
-    MuJoCo resolves ``<include>`` and ``meshdir`` relative to the loading
-    file's directory. We write a temp copy of the scene XML into the panda
-    directory so that ``panda.xml``'s internal ``meshdir="assets"`` resolves
-    correctly.
-
-    Args:
-        xml_path: Path to the scene XML file.
-        panda_dir: Directory containing ``panda.xml``.
-        add_wrist_camera: If True, inject a wrist camera on the hand body
-            via MjSpec.
-
-    Returns:
-        Compiled MuJoCo model.
-    """
-    with open(xml_path) as f:
-        xml = f.read()
-
-    # If the scene still references the old third_party path, fix it.
-    xml = xml.replace(
-        'file="third_party/mujoco_menagerie/franka_emika_panda/panda.xml"',
-        'file="panda.xml"',
-    )
-    # Also handle the bundled data/ layout.
-    xml = xml.replace('file="franka_emika_panda/panda.xml"', 'file="panda.xml"')
-    xml = xml.replace('<compiler angle="radian"/>\n\n', "")
-
-    abs_panda_dir = os.path.abspath(panda_dir)
-    fd, tmp_path = tempfile.mkstemp(suffix=".xml", dir=abs_panda_dir)
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(xml)
-
-        if add_wrist_camera:
-            spec = mujoco.MjSpec.from_file(tmp_path)
-            hand = spec.body("hand")
-            cam = hand.add_camera()
-            cam.name = "wrist"
-            cam.pos = [-0.07, 0.0, 0.055]
-            cam.quat = [
-                -0.0616,
-                -0.7044,
-                0.7044,
-                0.0616,
-            ]
-            cam.fovy = 128.0
-            return spec.compile()
-        else:
-            return mujoco.MjModel.from_xml_path(tmp_path)
-    finally:
-        os.unlink(tmp_path)
 
 
 class PickPlaceEnv:
@@ -92,7 +33,7 @@ class PickPlaceEnv:
             xml_path = _DEFAULT_SCENE_XML
         if panda_dir is None:
             panda_dir = _DEFAULT_PANDA_DIR
-        self.model: mujoco.MjModel = _load_scene(
+        self.model: mujoco.MjModel = load_scene(
             xml_path, panda_dir, add_wrist_camera=add_wrist_camera
         )
         self.data: mujoco.MjData = mujoco.MjData(self.model)

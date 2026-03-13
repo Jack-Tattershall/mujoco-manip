@@ -8,7 +8,11 @@ import time
 from pathlib import Path
 
 import numpy as np
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+try:
+    from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+except ImportError:
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from mujoco_manip.tasks.bottle_packing.constants import (
     ACTION_REPEAT,
@@ -102,8 +106,15 @@ def main() -> None:
     for i in range(step_in_run):
         packed[i] = well_schedule[i]
 
-    # Reconstruct per-episode seed for reproducible belt Y noise
-    ep_seed = int(np.random.SeedSequence(seed).spawn(ep + 1)[ep].generate_state(1)[0])
+    # Reconstruct per-episode seed — spawn the same count as generation script
+    num_episodes = metadata.get("num_episodes", ep + 1)
+    if ep >= num_episodes:
+        raise ValueError(
+            f"Episode {ep} exceeds num_episodes={num_episodes} from metadata"
+        )
+    ep_seed = int(
+        np.random.SeedSequence(seed).spawn(num_episodes)[ep].generate_state(1)[0]
+    )
 
     gym_env = BottlePackingGymEnv(
         action_mode=action_mode,

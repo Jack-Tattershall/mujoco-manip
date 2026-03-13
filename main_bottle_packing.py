@@ -10,6 +10,17 @@ from mujoco_manip.tasks.bottle_packing.constants import NUM_WELLS, well_row_col
 from mujoco_manip.tasks.bottle_packing.env import BottlePackingEnv
 from mujoco_manip.tasks.bottle_packing.fsm import BottlePackingTask, State
 
+# States with per-tick countdown messages — suppress from log output
+_QUIET_STATES = frozenset(
+    {
+        State.CLOSE_GRIPPER,
+        State.SETTLE_AT_WELL,
+        State.INSERT_SETTLE,
+        State.RELEASE,
+        State.RELEASE_WAIT,
+    }
+)
+
 
 def main() -> None:
     """Run the interactive bottle packing simulation with a passive viewer."""
@@ -73,7 +84,9 @@ def main() -> None:
     env.launch_viewer()
 
     env.setup_scene(num_prepacked=num_prepacked)
-    env.load_conveyor(bottle_indices)
+
+    # Load all bottles onto the conveyor belt
+    env.load_conveyor(list(bottle_indices))
 
     step_time = env.model.opt.timestep * args.slow
     total_steps = 0
@@ -89,19 +102,27 @@ def main() -> None:
     while env.is_running():
         t_start = time.monotonic()
 
+        # --- Check if a bottle has arrived at pickup and we're idle ---
+        if task is None and env.bottle_at_pickup is not None:
+            arrived = env.start_pickup()
+            next_well = next(well_iter, None)
+            if next_well is None:
+                break
+            current_bottle = arrived
+            current_well = next_well
+            row, col = well_row_col(next_well)
+            print(f"\n=== Bottle {arrived} -> well ({row},{col}) ===")
+            task = BottlePackingTask(env, robot, controller, well_index=next_well)
+            conveyor_resumed = False
+            last_status = ""
+
         # --- FSM tick ---
         if task is not None:
             status = task.update()
 
-            if (
-                status != last_status
-                and "Gripping" not in status
-                and "Releasing (" not in status
-                and "Settling above well (" not in status
-            ):
-                print(f"  [{total_steps:>6d}] {status}")
-                last_status = status
-            elif status != last_status:
+            if status != last_status:
+                if task.state not in _QUIET_STATES:
+                    print(f"  [{total_steps:>6d}] {status}")
                 last_status = status
 
             # Resume conveyor once bottle is lifted clear of belt
@@ -120,23 +141,8 @@ def main() -> None:
         # --- Physics ---
         env.step()
 
-        # --- Conveyor tick (kinematic, after physics) ---
+        # --- Conveyor tick (advance belt bottles) ---
         env.tick_conveyor()
-
-        # --- Start new task when robot is free and a bottle is waiting ---
-        if task is None:
-            bottle_idx = env.start_pickup()
-            if bottle_idx is not None:
-                current_well = next(well_iter, None)
-                if current_well is not None:
-                    row, col = well_row_col(current_well)
-                    print(f"\n=== Bottle {bottle_idx} -> well ({row},{col}) ===")
-                    current_bottle = bottle_idx
-                    task = BottlePackingTask(
-                        env, robot, controller, well_index=current_well
-                    )
-                    conveyor_resumed = False
-                    last_status = ""
 
         env.sync()
         total_steps += 1

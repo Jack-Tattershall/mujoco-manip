@@ -1,7 +1,6 @@
 """MuJoCo environment wrapper for the bottle packing scene."""
 
-import os
-import tempfile
+from collections import deque
 
 import mujoco
 import mujoco.viewer
@@ -9,6 +8,7 @@ import numpy as np
 
 from mujoco_manip.data import PANDA_DIR as _DEFAULT_PANDA_DIR
 from mujoco_manip.data import BOTTLE_PACKING_SCENE_XML as _DEFAULT_SCENE_XML
+from mujoco_manip.scene_loader import load_scene
 
 from .constants import (
     BELT_Y_NOISE,
@@ -21,46 +21,11 @@ from .constants import (
     CONVEYOR_ANIM_STEPS,
     CONVEYOR_BOTTLE_SPACING,
     CONVEYOR_SPEED,
+    CRATE_JOINT_NAMES,
     MAX_BELT_BOTTLES,
     NUM_WELLS,
     well_position,
 )
-
-
-def _load_scene(
-    xml_path: str, panda_dir: str, add_wrist_camera: bool = False
-) -> mujoco.MjModel:
-    """Load the scene XML, resolving robot meshes from *panda_dir*."""
-    with open(xml_path) as f:
-        xml = f.read()
-
-    xml = xml.replace('file="franka_emika_panda/panda.xml"', 'file="panda.xml"')
-    xml = xml.replace('<compiler angle="radian"/>\n\n', "")
-
-    abs_panda_dir = os.path.abspath(panda_dir)
-    fd, tmp_path = tempfile.mkstemp(suffix=".xml", dir=abs_panda_dir)
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(xml)
-
-        if add_wrist_camera:
-            spec = mujoco.MjSpec.from_file(tmp_path)
-            hand = spec.body("hand")
-            cam = hand.add_camera()
-            cam.name = "wrist"
-            cam.pos = [-0.07, 0.0, 0.055]
-            cam.quat = [
-                -0.0616,
-                -0.7044,
-                0.7044,
-                0.0616,
-            ]
-            cam.fovy = 128.0
-            return spec.compile()
-        else:
-            return mujoco.MjModel.from_xml_path(tmp_path)
-    finally:
-        os.unlink(tmp_path)
 
 
 class BottlePackingEnv:
@@ -76,47 +41,77 @@ class BottlePackingEnv:
             xml_path = _DEFAULT_SCENE_XML
         if panda_dir is None:
             panda_dir = _DEFAULT_PANDA_DIR
-        self.model: mujoco.MjModel = _load_scene(
+        self.model: mujoco.MjModel = load_scene(
             xml_path, panda_dir, add_wrist_camera=add_wrist_camera
         )
         self.data: mujoco.MjData = mujoco.MjData(self.model)
         self.viewer = None
 
-        # Cache joint qpos/qvel addresses for all 20 bottles
+        # Cache joint, geom, and body IDs for all 20 bottles
         self._bottle_qpos_adr: list[int] = []
         self._bottle_qvel_adr: list[int] = []
+        self._bottle_geom_ids: list[list[int]] = []
+        self._bottle_body_ids: list[int] = []
         for name in BOTTLE_BODIES:
-            jnt_name = f"{name}_jnt"
-            jnt_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, jnt_name)
+            jnt_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, f"{name}_jnt"
+            )
             self._bottle_qpos_adr.append(self.model.jnt_qposadr[jnt_id])
             self._bottle_qvel_adr.append(self.model.jnt_dofadr[jnt_id])
 
-        # Cache geom and body IDs for all 20 bottles
-        self._bottle_geom_ids: list[int] = []
-        self._bottle_body_ids: list[int] = []
-        for name in BOTTLE_BODIES:
-            self._bottle_geom_ids.append(
-                mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f"{name}_geom")
-            )
+            geom_ids = [
+                gid
+                for s in ("_body", "_neck")
+                if (
+                    gid := mujoco.mj_name2id(
+                        self.model, mujoco.mjtObj.mjOBJ_GEOM, f"{name}{s}"
+                    )
+                )
+                >= 0
+            ]
+            self._bottle_geom_ids.append(geom_ids)
             self._bottle_body_ids.append(
                 mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
             )
 
+        # Cache crate joint qpos addresses
+        self._crate_qpos_adr: list[int] = []
+        self._crate_is_dynamic = False
+        for jname in CRATE_JOINT_NAMES:
+            jnt_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            if jnt_id >= 0:
+                self._crate_qpos_adr.append(self.model.jnt_qposadr[jnt_id])
+                self._crate_is_dynamic = True
+            else:
+                break
+        if len(self._crate_qpos_adr) != len(CRATE_JOINT_NAMES):
+            self._crate_qpos_adr = []
+            self._crate_is_dynamic = False
+
         # Store default geom collision settings (to restore after freeze)
-        self._default_contype: int = self.model.geom_contype[self._bottle_geom_ids[0]]
-        self._default_conaffinity: int = self.model.geom_conaffinity[
-            self._bottle_geom_ids[0]
+        self._default_contype: int = self.model.geom_contype[
+            self._bottle_geom_ids[0][0]
         ]
+        self._default_conaffinity: int = self.model.geom_conaffinity[
+            self._bottle_geom_ids[0][0]
+        ]
+
+        # Cache body IDs for name-based lookups (pre-seeded with known bodies)
+        self._body_id_cache: dict[str, int] = {
+            name: bid for name, bid in zip(BOTTLE_BODIES, self._bottle_body_ids)
+        }
 
         # Index of the active bottle (the one the robot picks)
         self._active_bottle: int = 0
         # Indices of all bottles currently on the conveyor belt
-        self._belt_bottle_indices: list[int] = []
+        self._belt_bottle_indices: deque[int] = deque()
 
         # Tick-based conveyor state
-        self._pending_bottles: list[int] = []
+        self._pending_bottles: deque[int] = deque()
         self._conveyor_stopped: bool = True
         self._bottle_at_pickup: int | None = None
+        self._belt_y_noise: float = 0.0
+        self._belt_rng: np.random.Generator | None = None
 
     @property
     def active_bottle_body(self) -> str:
@@ -147,9 +142,9 @@ class BottlePackingEnv:
 
     def _unfreeze_bottle(self, idx: int) -> None:
         """Restore physics for a single bottle."""
-        gid = self._bottle_geom_ids[idx]
-        self.model.geom_contype[gid] = self._default_contype
-        self.model.geom_conaffinity[gid] = self._default_conaffinity
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = self._default_contype
+            self.model.geom_conaffinity[gid] = self._default_conaffinity
         bid = self._bottle_body_ids[idx]
         self.model.body_gravcomp[bid] = 0.0
         vadr = self._bottle_qvel_adr[idx]
@@ -157,9 +152,9 @@ class BottlePackingEnv:
 
     def _freeze_bottle(self, idx: int) -> None:
         """Make a single bottle physics-inert."""
-        gid = self._bottle_geom_ids[idx]
-        self.model.geom_contype[gid] = 0
-        self.model.geom_conaffinity[gid] = 0
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = 0
+            self.model.geom_conaffinity[gid] = 0
         bid = self._bottle_body_ids[idx]
         self.model.body_gravcomp[bid] = 1.0
         vadr = self._bottle_qvel_adr[idx]
@@ -204,7 +199,7 @@ class BottlePackingEnv:
             packed: Explicit bottle→well mapping (overrides ``num_prepacked``).
         """
         self._unfreeze_all_bottles()
-        self._belt_bottle_indices = []
+        self._belt_bottle_indices = deque()
 
         if packed is not None:
             for i in range(NUM_WELLS):
@@ -214,7 +209,8 @@ class BottlePackingEnv:
                     self._set_bottle_pose(i, pos)
                 else:
                     self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
-            # Active bottle = first unpacked index
+            # Placeholder: overwritten by spawn_bottle_on_conveyor / load_conveyor.
+            # Uses max(keys)+1 as a safe default for freeze_inactive_bottles.
             self._active_bottle = max(packed.keys()) + 1 if packed else 0
         else:
             for i in range(NUM_WELLS):
@@ -239,7 +235,7 @@ class BottlePackingEnv:
             y_offset: Lateral offset from belt centre (metres).
         """
         self._active_bottle = bottle_idx
-        self._belt_bottle_indices = [bottle_idx]
+        self._belt_bottle_indices = deque([bottle_idx])
 
         # Freeze everything, then unfreeze only the active bottle
         self._freeze_inactive_bottles()
@@ -260,6 +256,25 @@ class BottlePackingEnv:
         """
         self.setup_scene(num_prepacked=target_well)
         self.spawn_bottle_on_conveyor(target_well)
+
+    def spawn_bottle_at_pickup(self, bottle_idx: int, y_offset: float = 0.0) -> None:
+        """Place a bottle directly at the pickup position, ready for grasping.
+
+        Skips the conveyor animation entirely — the robot can pick immediately.
+
+        Args:
+            bottle_idx: Bottle index (0–19) to spawn.
+            y_offset: Lateral offset from pickup centre (metres).
+        """
+        self._active_bottle = bottle_idx
+        self._belt_bottle_indices = deque()
+
+        self._freeze_inactive_bottles()
+        self._unfreeze_bottle(bottle_idx)
+        pos = BOTTLE_PICKUP_POS.copy()
+        pos[1] += y_offset
+        self._set_bottle_pose(bottle_idx, pos)
+        mujoco.mj_forward(self.model, self.data)
 
     def animate_conveyor(self) -> None:
         """Slide all belt bottles forward, delivering the active bottle to pickup.
@@ -312,9 +327,11 @@ class BottlePackingEnv:
 
         Clears the material reference so ``geom_rgba`` is used directly.
         """
-        for i, gid in enumerate(self._bottle_geom_ids):
-            self.model.geom_matid[gid] = -1  # stop using shared material
-            self.model.geom_rgba[gid] = BOTTLE_COLORS[i % len(BOTTLE_COLORS)]
+        for i, geom_ids in enumerate(self._bottle_geom_ids):
+            color = BOTTLE_COLORS[i % len(BOTTLE_COLORS)]
+            for gid in geom_ids:
+                self.model.geom_matid[gid] = -1  # stop using shared material
+                self.model.geom_rgba[gid] = color
 
     # ------------------------------------------------------------------
     # Tick-based conveyor (concurrent with FSM)
@@ -338,8 +355,8 @@ class BottlePackingEnv:
             y_noise: Half-range of uniform Y offset (metres). Set to 0
                 to disable.
         """
-        self._pending_bottles = list(bottle_indices)
-        self._belt_bottle_indices = []
+        self._pending_bottles = deque(bottle_indices)
+        self._belt_bottle_indices = deque()
         self._conveyor_stopped = False
         self._bottle_at_pickup = None
         self._belt_y_noise = y_noise
@@ -348,12 +365,13 @@ class BottlePackingEnv:
         self._belt_rng = rng
 
         # Spawn initial batch spread across the belt, front to back.
-        # The first bottle (first to arrive) is placed furthest forward,
+        # The first bottle starts one spacing behind the pickup position,
         # subsequent ones are evenly spaced behind it.
         n_initial = min(MAX_BELT_BOTTLES, len(self._pending_bottles))
+        front_x = BOTTLE_PICKUP_POS[0] - CONVEYOR_BOTTLE_SPACING
         for i in range(n_initial):
-            idx = self._pending_bottles.pop(0)
-            x = BOTTLE_CONVEYOR_START[0] + (n_initial - 1 - i) * CONVEYOR_BOTTLE_SPACING
+            idx = self._pending_bottles.popleft()
+            x = front_x - i * CONVEYOR_BOTTLE_SPACING
             y = BOTTLE_CONVEYOR_START[1]
             if self._belt_y_noise > 0 and self._belt_rng is not None:
                 y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
@@ -368,7 +386,7 @@ class BottlePackingEnv:
         """Spawn the next pending bottle behind the last one on the belt."""
         if not self._pending_bottles:
             return
-        idx = self._pending_bottles.pop(0)
+        idx = self._pending_bottles.popleft()
 
         if self._belt_bottle_indices:
             last = self._belt_bottle_indices[-1]
@@ -415,10 +433,9 @@ class BottlePackingEnv:
             self._conveyor_stopped = True
             self._bottle_at_pickup = front
 
-            # Remove from belt, unfreeze for robot to pick
-            self._belt_bottle_indices.pop(0)
-            self._active_bottle = front
-            self._unfreeze_bottle(front)
+            # Remove from belt queue; bottle stays frozen at pickup
+            # until caller invokes start_pickup().
+            self._belt_bottle_indices.popleft()
 
             mujoco.mj_forward(self.model, self.data)
             return front
@@ -441,13 +458,19 @@ class BottlePackingEnv:
         self._conveyor_stopped = False
 
     def start_pickup(self) -> int | None:
-        """Consume the bottle waiting at pickup.
+        """Activate the bottle waiting at pickup for the robot to grasp.
 
-        Returns its index and clears the waiting state, or *None* if
-        no bottle is waiting.
+        Sets it as the active bottle, unfreezes its physics, and clears
+        the waiting state.  Returns the bottle index, or *None* if no
+        bottle is waiting.
         """
         idx = self._bottle_at_pickup
+        if idx is None:
+            return None
         self._bottle_at_pickup = None
+        self._active_bottle = idx
+        self._unfreeze_bottle(idx)
+        mujoco.mj_forward(self.model, self.data)
         return idx
 
     def mark_bottle_packed(self, bottle_idx: int) -> None:
@@ -479,16 +502,29 @@ class BottlePackingEnv:
             return True
         return self.viewer.is_running()
 
+    def _resolve_body_id(self, name: str) -> int:
+        """Look up body ID by name, caching the result."""
+        bid = self._body_id_cache.get(name)
+        if bid is None:
+            bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
+            if bid < 0:
+                raise ValueError(f"Body '{name}' not found")
+            self._body_id_cache[name] = bid
+        return bid
+
     def get_body_pos(self, name: str) -> np.ndarray:
         """Return world position (3,) of a named body."""
-        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
-        if body_id < 0:
-            raise ValueError(f"Body '{name}' not found")
-        return self.data.xpos[body_id].copy()
+        return self.data.xpos[self._resolve_body_id(name)].copy()
 
     def get_body_xmat(self, name: str) -> np.ndarray:
         """Return rotation matrix (3, 3) of a named body."""
-        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, name)
-        if body_id < 0:
-            raise ValueError(f"Body '{name}' not found")
-        return self.data.xmat[body_id].reshape(3, 3).copy()
+        return self.data.xmat[self._resolve_body_id(name)].reshape(3, 3).copy()
+
+    @property
+    def crate_displacement(self) -> np.ndarray:
+        """Return crate displacement [dx, dy, dtheta] from its rest position."""
+        if not self._crate_is_dynamic:
+            return np.zeros(3, dtype=np.float64)
+        return np.array(
+            [self.data.qpos[a] for a in self._crate_qpos_adr], dtype=np.float64
+        )
