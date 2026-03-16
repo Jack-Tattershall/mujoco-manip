@@ -72,6 +72,7 @@ def build_well_schedule(
     task: str,
     num_bottles: int,
     rng: random.Random,
+    excluded_wells: set[int] | None = None,
 ) -> list[int]:
     """Return the ordered list of target wells for one run.
 
@@ -79,11 +80,17 @@ def build_well_schedule(
         task: ``"random"`` or ``"sequential"``.
         num_bottles: How many bottles to pack in this run.
         rng: Random number generator (only used for ``"random"``).
+        excluded_wells: Well indices to omit from the schedule.
 
     Returns:
         List of well indices, length ``num_bottles``.
     """
-    wells = list(range(NUM_WELLS))
+    excluded = excluded_wells or frozenset()
+    wells = [w for w in range(NUM_WELLS) if w not in excluded]
+    if num_bottles > len(wells):
+        raise ValueError(
+            f"num_bottles ({num_bottles}) exceeds available wells ({len(wells)})"
+        )
     if task == "random":
         rng.shuffle(wells)
     return wells[:num_bottles]
@@ -213,8 +220,23 @@ def main(cfg: DictConfig) -> None:
     if task not in ("random", "sequential"):
         raise ValueError(f"task must be 'random' or 'sequential', got '{task}'")
 
-    num_bottles = cfg.get("num_bottles") or NUM_WELLS
-    num_bottles = min(int(num_bottles), NUM_WELLS)
+    # Parse excluded wells
+    excluded_wells: set[int] = set()
+    if cfg.get("excluded_wells") is not None:
+        excluded_wells = {int(w) for w in cfg.excluded_wells}
+        invalid = excluded_wells - set(range(NUM_WELLS))
+        if invalid:
+            raise ValueError(
+                f"excluded_wells contains invalid indices: {sorted(invalid)}. "
+                f"Valid range: 0–{NUM_WELLS - 1}"
+            )
+        print(f"Excluding wells: {sorted(excluded_wells)}")
+
+    available_wells = NUM_WELLS - len(excluded_wells)
+    if available_wells == 0:
+        raise ValueError("All wells are excluded — no wells available for packing.")
+    num_bottles = cfg.get("num_bottles") or available_wells
+    num_bottles = min(int(num_bottles), available_wells)
 
     features = FEATURES
     if cfg.features is not None:
@@ -257,12 +279,21 @@ def main(cfg: DictConfig) -> None:
     ep_seeds = np.random.SeedSequence(cfg.seed).spawn(cfg.num_episodes)
     total_episodes = 0
 
-    print(f"Task: {task}, {num_bottles} bottles/run, {cfg.num_episodes} episodes")
+    if cfg.num_episodes % num_bottles != 0:
+        print(
+            f"Note: {cfg.num_episodes} episodes is not a multiple of "
+            f"{num_bottles} bottles/run — final run will be partial "
+            f"({cfg.num_episodes % num_bottles} bottles)."
+        )
+    excl_str = f" (excluded: {sorted(excluded_wells)})" if excluded_wells else ""
+    print(
+        f"Task: {task}, {num_bottles} bottles/run, {cfg.num_episodes} episodes{excl_str}"
+    )
 
     for ep_idx in range(cfg.num_episodes):
         # Start a new run when the previous one is exhausted
         if ep_idx % num_bottles == 0:
-            well_schedule = build_well_schedule(task, num_bottles, rng)
+            well_schedule = build_well_schedule(task, num_bottles, rng, excluded_wells)
             packed: dict[int, int] = {}
             run_num = ep_idx // num_bottles + 1
             print(f"\n--- Run {run_num} (well order: {well_schedule}) ---")

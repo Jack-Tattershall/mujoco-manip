@@ -6,8 +6,13 @@ root: ./datasets
 # Task mode: "random" shuffles well order per run; "sequential" packs 0,1,2,...
 task: random
 
+# Wells to exclude from the schedule (list of 0–19 indices).
+# Bottles will never be placed in these wells.  Useful for holding out
+# wells during training so a VLA can be evaluated on unseen targets.
+excluded_wells: null
+
 # Number of bottles to pack per run (each bottle = 1 episode).
-# null = all 20 wells.
+# null = all available wells (20 minus any excluded).
 num_bottles: null
 
 reward_type: staged

@@ -78,8 +78,12 @@ def main() -> None:
 
     task_mode = metadata.get("task", "sequential")
     seed = metadata.get("seed", 0)
-    num_bottles = metadata.get("num_bottles") or NUM_WELLS
-    num_bottles = min(int(num_bottles), NUM_WELLS)
+    excluded_wells: set[int] = set()
+    if metadata.get("excluded_wells") is not None:
+        excluded_wells = {int(w) for w in metadata["excluded_wells"]}
+    available_wells = NUM_WELLS - len(excluded_wells)
+    num_bottles = metadata.get("num_bottles") or available_wells
+    num_bottles = min(int(num_bottles), available_wells)
 
     # Rebuild the well schedule for the run containing this episode
     rng = random.Random(seed)
@@ -87,12 +91,12 @@ def main() -> None:
     # Fast-forward RNG through prior runs
     num_prior_runs = ep // num_bottles
     for _ in range(num_prior_runs):
-        wells = list(range(NUM_WELLS))
+        wells = [w for w in range(NUM_WELLS) if w not in excluded_wells]
         if task_mode == "random":
             rng.shuffle(wells)
 
     # Build schedule for the current run
-    wells = list(range(NUM_WELLS))
+    wells = [w for w in range(NUM_WELLS) if w not in excluded_wells]
     if task_mode == "random":
         rng.shuffle(wells)
     well_schedule = wells[:num_bottles]
