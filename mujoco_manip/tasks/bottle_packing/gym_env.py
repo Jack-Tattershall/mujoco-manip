@@ -139,16 +139,9 @@ class BottlePackingGymEnv(gym.Env):
         self._above_target = False
         self._has_placed = False
         self._reward_hwm: np.ndarray | None = None
-        self._robot_geom_ids: frozenset[int] = frozenset()
-        self._obstacle_geom_ids: frozenset[int] = frozenset()
 
-        # Build geom-ID sets for collision queries.
-        # Bottle and crate sets are always populated (used for info flags).
-        # Robot/obstacle sets are only needed for staged reward penalty.
-        robot_bodies = self._robot.BODY_NAMES
+        # Build geom-ID sets for collision info flags.
         bottle_body_set = set(BOTTLE_BODIES)
-        robot_ids: set[int] = set()
-        obstacle_ids: set[int] = set()
         bottle_ids: set[int] = set()
         crate_ids: set[int] = set()
         for i in range(self._env.model.ngeom):
@@ -156,20 +149,12 @@ class BottlePackingGymEnv(gym.Env):
             body_name = mujoco.mj_id2name(
                 self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
             )
-            if body_name in robot_bodies:
-                robot_ids.add(i)
-            elif body_name in bottle_body_set:
+            if body_name in bottle_body_set:
                 bottle_ids.add(i)
             elif body_name == CRATE_BODY:
                 crate_ids.add(i)
-            elif body_name and body_name != "world":
-                obstacle_ids.add(i)
         self._bottle_geom_ids: frozenset[int] = frozenset(bottle_ids)
         self._crate_geom_ids: frozenset[int] = frozenset(crate_ids)
-        if reward_type == "staged":
-            self._robot_geom_ids = frozenset(robot_ids)
-            # Obstacles include crate for robot-obstacle collision
-            self._obstacle_geom_ids = frozenset(obstacle_ids | crate_ids)
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -368,16 +353,6 @@ class BottlePackingGymEnv(gym.Env):
             and bottle_pos[2] < well_target_z + _REWARD_PLACED_Z
         )
 
-    def _check_robot_collision(self) -> bool:
-        for i in range(self._env.data.ncon):
-            c = self._env.data.contact[i]
-            g1, g2 = c.geom1, c.geom2
-            if (g1 in self._robot_geom_ids and g2 in self._obstacle_geom_ids) or (
-                g2 in self._robot_geom_ids and g1 in self._obstacle_geom_ids
-            ):
-                return True
-        return False
-
     def _check_bottle_crate_collision(self) -> bool:
         """Check if any bottle geom is in contact with a crate geom."""
         for i in range(self._env.data.ncon):
@@ -487,14 +462,9 @@ class BottlePackingGymEnv(gym.Env):
         """Compute staged reward from current HWM (phase tracking already done).
 
         Returns:
-            Tuple of (reward, done). Returns -1.0 with
-            done=True on robot-obstacle collision.
+            Tuple of (reward, done).
         """
         done = self._update_phase_tracking()
-
-        if self._check_robot_collision():
-            return -1.0, True
-
         reward = float(self._reward_hwm.mean())
         return reward, done
 
@@ -671,8 +641,8 @@ class BottlePackingGymEnv(gym.Env):
 
         reward, _ = self._compute_reward()
         if self._reward_type == "staged":
-            terminated = reward < 0 or success
-            info = {"success": success and reward >= 0}
+            terminated = success
+            info = {"success": success}
             if self._reward_hwm is not None:
                 normed = self._reward_hwm / len(self._reward_hwm)
                 info["reward_components"] = np.array(

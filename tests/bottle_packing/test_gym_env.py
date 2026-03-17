@@ -412,17 +412,13 @@ class TestStagedReward:
         assert staged_env._has_placed is False
         assert staged_env._reward_hwm is None
 
-    def test_collision_geom_sets_populated(self, staged_env):
-        assert len(staged_env._robot_geom_ids) > 0
-        assert len(staged_env._obstacle_geom_ids) > 0
-
     def test_staged_reward_range(self, staged_env):
         staged_env.reset()
         for _ in range(10):
             _, r, term, _, _ = staged_env.step(staged_env.action_space.sample())
-            if term and r < 0:
-                break
             assert 0.0 <= r <= 1.0
+            if term:
+                break
 
     def test_reward_components_in_info(self, staged_env):
         staged_env.reset()

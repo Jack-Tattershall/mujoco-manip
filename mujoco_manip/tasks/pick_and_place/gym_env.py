@@ -132,38 +132,23 @@ class PickPlaceGymEnv(gym.Env):
         self._above_target = False
         self._has_placed = False
         self._reward_hwm: np.ndarray | None = None
-        self._robot_geom_ids: set[int] = set()
-        self._obstacle_geom_ids: set[int] = set()
 
-        # Build geom-ID sets for collision queries.
-        # Object and bin sets are always populated (used for info flags).
-        # Robot/obstacle sets are only needed for staged reward penalty.
-        robot_bodies = self._robot.BODY_NAMES
+        # Build geom-ID sets for collision info flags.
         object_bodies = set(OBJECTS)
         bin_bodies = set(BINS)
         object_ids: set[int] = set()
         bin_ids: set[int] = set()
-        robot_ids: set[int] = set()
-        obstacle_ids: set[int] = set()
         for i in range(self._env.model.ngeom):
             body_id = self._env.model.geom_bodyid[i]
             body_name = mujoco.mj_id2name(
                 self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
             )
-            if body_name in robot_bodies:
-                robot_ids.add(i)
-            elif body_name in object_bodies:
+            if body_name in object_bodies:
                 object_ids.add(i)
             elif body_name in bin_bodies:
                 bin_ids.add(i)
-            elif body_name and body_name != "world":
-                obstacle_ids.add(i)
         self._object_geom_ids: frozenset[int] = frozenset(object_ids)
         self._bin_geom_ids: frozenset[int] = frozenset(bin_ids)
-        if reward_type == "staged":
-            self._robot_geom_ids = robot_ids
-            # Obstacles include bins for robot-obstacle collision
-            self._obstacle_geom_ids = obstacle_ids | bin_ids
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -356,17 +341,6 @@ class PickPlaceGymEnv(gym.Env):
             "target_bin_keypoints_overhead": self._target_bin_kp_overhead,
         }
 
-    def _check_robot_collision(self) -> bool:
-        """Check if any robot geom is in contact with an obstacle geom."""
-        for i in range(self._env.data.ncon):
-            c = self._env.data.contact[i]
-            g1, g2 = c.geom1, c.geom2
-            if (g1 in self._robot_geom_ids and g2 in self._obstacle_geom_ids) or (
-                g2 in self._robot_geom_ids and g1 in self._obstacle_geom_ids
-            ):
-                return True
-        return False
-
     def _check_object_bin_collision(self) -> bool:
         """Check if any object geom is in contact with a bin geom."""
         for i in range(self._env.data.ncon):
@@ -470,15 +444,9 @@ class PickPlaceGymEnv(gym.Env):
         """Compute staged reward from current HWM (phase tracking already done).
 
         Returns:
-            Tuple of (reward, done). Returns -1.0 with
-            done=True on robot-obstacle collision.
+            Tuple of (reward, done).
         """
         done = self._update_phase_tracking()
-
-        # Collision check
-        if self._check_robot_collision():
-            return -1.0, True
-
         reward = float(self._reward_hwm.mean())
         return reward, done
 
@@ -617,9 +585,8 @@ class PickPlaceGymEnv(gym.Env):
 
         reward, _ = self._compute_reward()
         if self._reward_type == "staged":
-            # collision (reward < 0) is not success; otherwise use the done flag
-            terminated = reward < 0 or success
-            info = {"success": success and reward >= 0}
+            terminated = success
+            info = {"success": success}
             # Expose staged reward breakdown: [total, r0/5, r1/5, r2/5, r3/5, r4/5]
             if self._reward_hwm is not None:
                 normed = self._reward_hwm / len(self._reward_hwm)
