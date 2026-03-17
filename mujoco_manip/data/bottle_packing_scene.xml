@@ -89,8 +89,9 @@
     </body>
 
     <!-- ============ CRATE (5x4 wells, 55mm spacing) ============ -->
-    <!-- On table surface at z=0.24.  Wells: 37mm clear opening, 4.5mm clearance per side. -->
-    <!-- Walls 104mm tall (half-height 0.052, center z=0.054): fully contain 100mm bottles. -->
+    <!-- On table surface at z=0.24.  Wells: 37mm clear opening, 5.5mm clearance per side. -->
+    <!-- Well cols at x: -0.11, -0.055, 0, 0.055, 0.11 -->
+    <!-- Well rows at y: -0.0825, -0.0275, 0.0275, 0.0825 -->
     <body name="crate" pos="0.25 0.40 0.24">
       <joint name="crate_slide_x" type="slide" axis="1 0 0" damping="50" limited="true" range="-0.03 0.03"/>
       <joint name="crate_slide_y" type="slide" axis="0 1 0" damping="50" limited="true" range="-0.03 0.03"/>
@@ -98,30 +99,30 @@
       <!-- Floor -->
       <geom name="crate_floor" type="box" size="0.14 0.113 0.002" pos="0 0 0"
             material="crate_mat" mass="2.0"/>
-      <!-- Outer walls -->
-      <geom name="crate_front" type="box" size="0.14 0.003 0.052" pos="0 -0.113 0.054"
+      <!-- Outer walls (half-height 0.040 → 8cm tall, = bottle height) -->
+      <geom name="crate_front" type="box" size="0.14 0.003 0.040" pos="0 -0.113 0.042"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="crate_back" type="box" size="0.14 0.003 0.052" pos="0 0.113 0.054"
+      <geom name="crate_back" type="box" size="0.14 0.003 0.040" pos="0 0.113 0.042"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="crate_left" type="box" size="0.003 0.113 0.052" pos="-0.14 0 0.054"
+      <geom name="crate_left" type="box" size="0.003 0.113 0.040" pos="-0.14 0 0.042"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="crate_right" type="box" size="0.003 0.113 0.052" pos="0.14 0 0.054"
+      <geom name="crate_right" type="box" size="0.003 0.113 0.040" pos="0.14 0 0.042"
             material="crate_wall_mat" mass="0.1"/>
       <!-- Vertical dividers (between columns, parallel to Y axis) -->
-      <geom name="div_v0" type="box" size="0.009 0.11 0.052" pos="-0.0825 0 0.054"
+      <geom name="div_v0" type="box" size="0.009 0.11 0.030" pos="-0.0825 0 0.032"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="div_v1" type="box" size="0.009 0.11 0.052" pos="-0.0275 0 0.054"
+      <geom name="div_v1" type="box" size="0.009 0.11 0.030" pos="-0.0275 0 0.032"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="div_v2" type="box" size="0.009 0.11 0.052" pos="0.0275 0 0.054"
+      <geom name="div_v2" type="box" size="0.009 0.11 0.030" pos="0.0275 0 0.032"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="div_v3" type="box" size="0.009 0.11 0.052" pos="0.0825 0 0.054"
+      <geom name="div_v3" type="box" size="0.009 0.11 0.030" pos="0.0825 0 0.032"
             material="crate_wall_mat" mass="0.1"/>
       <!-- Horizontal dividers (between rows, parallel to X axis) -->
-      <geom name="div_h0" type="box" size="0.137 0.009 0.052" pos="0 -0.055 0.054"
+      <geom name="div_h0" type="box" size="0.137 0.009 0.030" pos="0 -0.055 0.032"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="div_h1" type="box" size="0.137 0.009 0.052" pos="0 0.0 0.054"
+      <geom name="div_h1" type="box" size="0.137 0.009 0.030" pos="0 0.0 0.032"
             material="crate_wall_mat" mass="0.1"/>
-      <geom name="div_h2" type="box" size="0.137 0.009 0.052" pos="0 0.055 0.054"
+      <geom name="div_h2" type="box" size="0.137 0.009 0.030" pos="0 0.055 0.032"
             material="crate_wall_mat" mass="0.1"/>
     </body>
 
