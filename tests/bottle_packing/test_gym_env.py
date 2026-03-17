@@ -232,6 +232,17 @@ class TestStep:
         _, _, _, _, info = env.step(env.action_space.sample())
         assert "success" in info
 
+    def test_peak_insertion_force_every_step(self, env):
+        """peak_insertion_force must be in info on every step, not just terminal."""
+        env.reset()
+        for _ in range(3):
+            _, _, term, trunc, info = env.step(env.action_space.sample())
+            assert "peak_insertion_force" in info
+            assert isinstance(info["peak_insertion_force"], float)
+            assert info["peak_insertion_force"] >= 0.0
+            if term or trunc:
+                break
+
 
 # ---------------------------------------------------------------------------
 # Identity action

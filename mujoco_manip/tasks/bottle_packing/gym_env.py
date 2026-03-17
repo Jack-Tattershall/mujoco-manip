@@ -661,8 +661,7 @@ class BottlePackingGymEnv(gym.Env):
         info["collision_bottle_crate"] = self._check_bottle_crate_collision()
         info["collision_bottle_bottle"] = self._check_bottle_bottle_collision()
 
-        if terminated or truncated:
-            info["peak_insertion_force"] = self._peak_fz
+        info["peak_insertion_force"] = self._peak_fz
 
         obs = self._get_obs()
         return obs, reward, terminated, truncated, info
