@@ -44,7 +44,7 @@ ACTION_MODES = (
 # Staged reward thresholds
 _REWARD_D_MAX = 0.5  # max distance for normalised distance rewards
 _REWARD_GRASP_Z = 0.35  # bottle z threshold for grasp detection
-_REWARD_LIFT_Z = 0.42  # bottle z threshold for lift detection
+_REWARD_LIFT_Z = 0.38  # bottle z threshold for lift detection (bottle CoM lags gripper)
 _REWARD_ABOVE_XY = 0.04  # XY distance threshold for "above target"
 _REWARD_PLACED_Z = 0.04  # Z tolerance above well target for placement
 _REWARD_HOME_DIST = 0.05  # EE distance to home for completion

@@ -62,9 +62,9 @@ BOTTLE_HIDDEN_POS = np.array([0.0, 0.0, -1.0])
 # Bottle half-height (for computing center height in wells)
 BOTTLE_HALF_HEIGHT = 0.05
 
-# Height of inner well divider walls above crate floor (metres).
-# Dividers: half-height 0.030, centred at z=0.032 relative to crate body.
-WELL_WALL_HEIGHT = 0.062
+# Height of wall tops above crate body origin (metres).
+# Walls are 104mm tall above the floor surface (z=0.002 local).
+WELL_WALL_HEIGHT = 0.106
 
 # All well indices (0–19)
 ALL_WELLS = list(range(NUM_WELLS))
