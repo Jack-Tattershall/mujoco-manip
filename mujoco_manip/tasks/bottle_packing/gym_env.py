@@ -23,6 +23,7 @@ from .constants import (
     BOTTLE_BODIES,
     BOTTLE_HALF_HEIGHT,
     CONVEYOR_RESUME_Z,
+    CRATE_BODY,
     IMAGE_SIZE,
     MAX_EPISODE_STEPS,
     NUM_WELLS,
@@ -141,26 +142,34 @@ class BottlePackingGymEnv(gym.Env):
         self._robot_geom_ids: frozenset[int] = frozenset()
         self._obstacle_geom_ids: frozenset[int] = frozenset()
 
+        # Build geom-ID sets for collision queries.
+        # Bottle and crate sets are always populated (used for info flags).
+        # Robot/obstacle sets are only needed for staged reward penalty.
+        robot_bodies = self._robot.BODY_NAMES
+        bottle_body_set = set(BOTTLE_BODIES)
+        robot_ids: set[int] = set()
+        obstacle_ids: set[int] = set()
+        bottle_ids: set[int] = set()
+        crate_ids: set[int] = set()
+        for i in range(self._env.model.ngeom):
+            body_id = self._env.model.geom_bodyid[i]
+            body_name = mujoco.mj_id2name(
+                self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
+            )
+            if body_name in robot_bodies:
+                robot_ids.add(i)
+            elif body_name in bottle_body_set:
+                bottle_ids.add(i)
+            elif body_name == CRATE_BODY:
+                crate_ids.add(i)
+            elif body_name and body_name != "world":
+                obstacle_ids.add(i)
+        self._bottle_geom_ids: frozenset[int] = frozenset(bottle_ids)
+        self._crate_geom_ids: frozenset[int] = frozenset(crate_ids)
         if reward_type == "staged":
-            robot_bodies = self._robot.BODY_NAMES
-            bottle_body_set = set(BOTTLE_BODIES)
-            robot_ids: set[int] = set()
-            obstacle_ids: set[int] = set()
-            for i in range(self._env.model.ngeom):
-                body_id = self._env.model.geom_bodyid[i]
-                body_name = mujoco.mj_id2name(
-                    self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
-                )
-                if body_name in robot_bodies:
-                    robot_ids.add(i)
-                elif (
-                    body_name
-                    and body_name != "world"
-                    and body_name not in bottle_body_set
-                ):
-                    obstacle_ids.add(i)
             self._robot_geom_ids = frozenset(robot_ids)
-            self._obstacle_geom_ids = frozenset(obstacle_ids)
+            # Obstacles include crate for robot-obstacle collision
+            self._obstacle_geom_ids = frozenset(obstacle_ids | crate_ids)
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -369,11 +378,36 @@ class BottlePackingGymEnv(gym.Env):
                 return True
         return False
 
-    def _compute_staged_reward(self) -> tuple[float, bool]:
-        """Compute staged reward with five sequential phases.
+    def _check_bottle_crate_collision(self) -> bool:
+        """Check if any bottle geom is in contact with a crate geom."""
+        for i in range(self._env.data.ncon):
+            c = self._env.data.contact[i]
+            g1, g2 = c.geom1, c.geom2
+            if (g1 in self._bottle_geom_ids and g2 in self._crate_geom_ids) or (
+                g2 in self._bottle_geom_ids and g1 in self._crate_geom_ids
+            ):
+                return True
+        return False
 
-        Phases: reach_bottle -> pick_bottle -> reach_well -> place_bottle ->
-        reach_home.  Each contributes [0, 0.2] for a total range of [0, 1].
+    def _check_bottle_bottle_collision(self) -> bool:
+        """Check if any two bottle geoms are in contact with each other."""
+        for i in range(self._env.data.ncon):
+            c = self._env.data.contact[i]
+            g1, g2 = c.geom1, c.geom2
+            if g1 in self._bottle_geom_ids and g2 in self._bottle_geom_ids:
+                return True
+        return False
+
+    def _update_phase_tracking(self) -> bool:
+        """Update sticky phase flags and high-water marks.
+
+        Tracks five phases: reach_bottle → pick_bottle → reach_well →
+        place_bottle → reach_home.  Called every step regardless of
+        reward_type so that ``terminated`` and ``info["success"]`` always
+        reflect the full pick-place-return cycle.
+
+        Returns:
+            True when all five HWM components are >= 0.90 (episode success).
         """
         bottle_pos = self._env.get_body_pos(self._env.active_bottle_body)
         well_pos_3d = well_position(self._well_index)
@@ -447,11 +481,21 @@ class BottlePackingGymEnv(gym.Env):
             self._reward_hwm = np.zeros_like(components)
         self._reward_hwm = np.maximum(self._reward_hwm, components)
 
+        return bool(np.all(self._reward_hwm >= 0.90))
+
+    def _compute_staged_reward(self) -> tuple[float, bool]:
+        """Compute staged reward from current HWM (phase tracking already done).
+
+        Returns:
+            Tuple of (reward, done). Returns -1.0 with
+            done=True on robot-obstacle collision.
+        """
+        done = self._update_phase_tracking()
+
         if self._check_robot_collision():
             return -1.0, True
 
         reward = float(self._reward_hwm.mean())
-        done = bool(np.all(self._reward_hwm >= 0.90))
         return reward, done
 
     def _compute_reward(self) -> tuple[float, bool]:
@@ -619,7 +663,13 @@ class BottlePackingGymEnv(gym.Env):
                 self._conveyor_resumed = True
 
         self._step_count += 1
-        reward, success = self._compute_reward()
+
+        # Always track phases — success requires the full pick-place-return
+        # cycle (all five HWM components >= 0.90), matching the staged reward
+        # success condition regardless of reward_type.
+        success = self._update_phase_tracking()
+
+        reward, _ = self._compute_reward()
         if self._reward_type == "staged":
             terminated = reward < 0 or success
             info = {"success": success and reward >= 0}
@@ -632,6 +682,10 @@ class BottlePackingGymEnv(gym.Env):
             terminated = success
             info = {"success": success}
         truncated = self._step_count >= self._max_episode_steps
+
+        # Collision flags (always reported, no effect on reward/termination)
+        info["collision_bottle_crate"] = self._check_bottle_crate_collision()
+        info["collision_bottle_bottle"] = self._check_bottle_bottle_collision()
 
         if terminated or truncated:
             info["peak_insertion_force"] = self._peak_fz

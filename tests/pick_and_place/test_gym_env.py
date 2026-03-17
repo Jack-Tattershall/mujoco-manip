@@ -883,3 +883,157 @@ class TestStagedReward:
             if term and r < 0:
                 break  # collision
             assert 0.0 <= r <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Phase tracking — success requires full pick-place-return cycle
+# ---------------------------------------------------------------------------
+
+
+class TestPhaseTracking:
+    """Verify that terminated/success require all 5 phases for every reward type."""
+
+    @pytest.fixture(params=["dense", "sparse", "staged"])
+    def phase_env(self, request):
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type=request.param,
+            task=("obj_red", "bin_red"),
+            max_episode_steps=500,
+        )
+        yield e
+        e.close()
+
+    def test_hwm_populated_after_step(self, phase_env):
+        """Phase tracking HWM must be populated after the first step."""
+        phase_env.reset()
+        phase_env.step(phase_env.action_space.sample())
+        assert phase_env._reward_hwm is not None
+        assert phase_env._reward_hwm.shape == (5,)
+
+    def test_not_successful_at_start(self, phase_env):
+        """No episode should be successful on the first step."""
+        phase_env.reset()
+        _, _, terminated, _, info = phase_env.step(phase_env.action_space.sample())
+        # Even if reward_type is dense/sparse, success requires all phases
+        assert info["success"] is False or info["success"] is np.False_
+
+    def test_placement_alone_does_not_terminate(self):
+        """Placing the object in the bin must NOT terminate the episode.
+
+        With the old (placement-only) success check the episode would
+        terminate here.  The new phase-tracking requires return-to-home.
+        """
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type="dense",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=500,
+        )
+        try:
+            e.reset()
+            # Drive the EE away from home so that phase 5 won't fire
+            away = np.array([0.15, 0.50, 0.40, 1.0], dtype=np.float32)
+            for _ in range(10):
+                e.step(away)
+
+            # Manually simulate placement without return-to-home
+            e._has_grasped = True
+            e._has_lifted = True
+            e._above_target = True
+            e._has_placed = True
+            # Force HWM for first 4 phases to 1.0, phase 5 stays low
+            e._reward_hwm = np.array([1.0, 1.0, 1.0, 1.0, 0.0])
+
+            _, _, terminated, _, info = e.step(away)
+            assert not info["success"], (
+                "Episode marked successful without return-to-home"
+            )
+            assert not terminated, (
+                "Episode terminated on placement without return-to-home"
+            )
+        finally:
+            e.close()
+
+    def test_full_cycle_sets_success(self):
+        """When all 5 HWM components are >= 0.90, success must be True."""
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type="dense",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=500,
+        )
+        try:
+            e.reset()
+            # Manually set all phases complete
+            e._has_grasped = True
+            e._has_lifted = True
+            e._above_target = True
+            e._has_placed = True
+            e._reward_hwm = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
+
+            success = e._update_phase_tracking()
+            assert success is True
+        finally:
+            e.close()
+
+    def test_sticky_flags_reset_for_dense(self):
+        """Phase tracking state must be cleared after reset in dense mode."""
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type="dense",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=50,
+        )
+        try:
+            e.reset()
+            e.step(e.action_space.sample())
+            # HWM should be set after first step
+            assert e._reward_hwm is not None
+            # Reset should clear everything
+            e.reset()
+            assert e._has_grasped is False
+            assert e._has_lifted is False
+            assert e._above_target is False
+            assert e._has_placed is False
+            assert e._reward_hwm is None
+        finally:
+            e.close()
+
+
+# ---------------------------------------------------------------------------
+# Collision detection
+# ---------------------------------------------------------------------------
+
+
+class TestCollisionDetection:
+    """Verify collision geom sets are populated and flags are in info."""
+
+    def test_geom_sets_populated(self):
+        """Object and bin geom sets should be non-empty for all reward types."""
+        e = PickPlaceGymEnv(
+            action_mode="abs_pos",
+            reward_type="dense",
+            task=("obj_red", "bin_red"),
+            max_episode_steps=10,
+        )
+        try:
+            assert len(e._object_geom_ids) > 0
+            assert len(e._bin_geom_ids) > 0
+        finally:
+            e.close()
+
+    def test_collision_flags_in_info(self, env):
+        """Step info must contain collision flags."""
+        env.reset()
+        _, _, _, _, info = env.step(env.action_space.sample())
+        assert "collision_object_bin" in info
+        assert "collision_object_object" in info
+        assert isinstance(info["collision_object_bin"], bool)
+        assert isinstance(info["collision_object_object"], bool)
+
+    def test_no_collision_at_start(self, env):
+        """Objects should not be colliding at episode start."""
+        env.reset()
+        _, _, _, _, info = env.step(env.action_space.sample())
+        assert info["collision_object_object"] is False

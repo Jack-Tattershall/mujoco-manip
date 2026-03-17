@@ -126,7 +126,7 @@ class PickPlaceGymEnv(gym.Env):
         self._target_obj_kp_overhead: np.ndarray | None = None
         self._target_bin_kp_overhead: np.ndarray | None = None
 
-        # Staged reward state (only used when reward_type == "staged")
+        # Staged reward state
         self._has_grasped = False
         self._has_lifted = False
         self._above_target = False
@@ -135,22 +135,35 @@ class PickPlaceGymEnv(gym.Env):
         self._robot_geom_ids: set[int] = set()
         self._obstacle_geom_ids: set[int] = set()
 
+        # Build geom-ID sets for collision queries.
+        # Object and bin sets are always populated (used for info flags).
+        # Robot/obstacle sets are only needed for staged reward penalty.
+        robot_bodies = self._robot.BODY_NAMES
+        object_bodies = set(OBJECTS)
+        bin_bodies = set(BINS)
+        object_ids: set[int] = set()
+        bin_ids: set[int] = set()
+        robot_ids: set[int] = set()
+        obstacle_ids: set[int] = set()
+        for i in range(self._env.model.ngeom):
+            body_id = self._env.model.geom_bodyid[i]
+            body_name = mujoco.mj_id2name(
+                self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
+            )
+            if body_name in robot_bodies:
+                robot_ids.add(i)
+            elif body_name in object_bodies:
+                object_ids.add(i)
+            elif body_name in bin_bodies:
+                bin_ids.add(i)
+            elif body_name and body_name != "world":
+                obstacle_ids.add(i)
+        self._object_geom_ids: frozenset[int] = frozenset(object_ids)
+        self._bin_geom_ids: frozenset[int] = frozenset(bin_ids)
         if reward_type == "staged":
-            robot_bodies = self._robot.BODY_NAMES
-            object_bodies = {"obj_red", "obj_green", "obj_blue"}
-            for i in range(self._env.model.ngeom):
-                body_id = self._env.model.geom_bodyid[i]
-                body_name = mujoco.mj_id2name(
-                    self._env.model, mujoco.mjtObj.mjOBJ_BODY, body_id
-                )
-                if body_name in robot_bodies:
-                    self._robot_geom_ids.add(i)
-                elif (
-                    body_name
-                    and body_name != "world"
-                    and body_name not in object_bodies
-                ):
-                    self._obstacle_geom_ids.add(i)
+            self._robot_geom_ids = robot_ids
+            # Obstacles include bins for robot-obstacle collision
+            self._obstacle_geom_ids = obstacle_ids | bin_ids
 
         if action_mode == "abs_pos":
             self.action_space = spaces.Box(
@@ -354,16 +367,36 @@ class PickPlaceGymEnv(gym.Env):
                 return True
         return False
 
-    def _compute_staged_reward(self) -> tuple[float, bool]:
-        """Compute staged reward with five sequential phases.
+    def _check_object_bin_collision(self) -> bool:
+        """Check if any object geom is in contact with a bin geom."""
+        for i in range(self._env.data.ncon):
+            c = self._env.data.contact[i]
+            g1, g2 = c.geom1, c.geom2
+            if (g1 in self._object_geom_ids and g2 in self._bin_geom_ids) or (
+                g2 in self._object_geom_ids and g1 in self._bin_geom_ids
+            ):
+                return True
+        return False
 
-        Phases: reach_object → pick_object → reach_target → place_object →
-        reach_home.  Each contributes [0, 0.2] for a total range of [0, 1].
-        High-water marks ensure the total is strictly monotonic.
+    def _check_object_object_collision(self) -> bool:
+        """Check if any two object geoms are in contact with each other."""
+        for i in range(self._env.data.ncon):
+            c = self._env.data.contact[i]
+            g1, g2 = c.geom1, c.geom2
+            if g1 in self._object_geom_ids and g2 in self._object_geom_ids:
+                return True
+        return False
+
+    def _update_phase_tracking(self) -> bool:
+        """Update sticky phase flags and high-water marks.
+
+        Tracks five phases: reach_object → pick_object → reach_target →
+        place_object → reach_home.  Called every step regardless of
+        reward_type so that ``terminated`` and ``info["success"]`` always
+        reflect the full pick-place-return cycle.
 
         Returns:
-            Tuple of (reward, terminated). Returns -1.0 with
-            terminated=True on robot-obstacle collision.
+            True when all five HWM components are >= 0.90 (episode success).
         """
         D_MAX = 0.5
         GRASP_Z = 0.35
@@ -431,12 +464,22 @@ class PickPlaceGymEnv(gym.Env):
             self._reward_hwm = np.zeros_like(components)
         self._reward_hwm = np.maximum(self._reward_hwm, components)
 
+        return bool(np.all(self._reward_hwm >= 0.90))
+
+    def _compute_staged_reward(self) -> tuple[float, bool]:
+        """Compute staged reward from current HWM (phase tracking already done).
+
+        Returns:
+            Tuple of (reward, done). Returns -1.0 with
+            done=True on robot-obstacle collision.
+        """
+        done = self._update_phase_tracking()
+
         # Collision check
         if self._check_robot_collision():
             return -1.0, True
 
         reward = float(self._reward_hwm.mean())
-        done = bool(np.all(self._reward_hwm >= 0.90))
         return reward, done
 
     def _compute_reward(self) -> tuple[float, bool]:
@@ -566,7 +609,13 @@ class PickPlaceGymEnv(gym.Env):
         mujoco.mj_forward(self._env.model, self._env.data)
 
         self._step_count += 1
-        reward, success = self._compute_reward()
+
+        # Always track phases — success requires the full pick-place-return
+        # cycle (all five HWM components >= 0.90), matching the staged reward
+        # success condition regardless of reward_type.
+        success = self._update_phase_tracking()
+
+        reward, _ = self._compute_reward()
         if self._reward_type == "staged":
             # collision (reward < 0) is not success; otherwise use the done flag
             terminated = reward < 0 or success
@@ -581,6 +630,10 @@ class PickPlaceGymEnv(gym.Env):
             terminated = success
             info = {"success": success}
         truncated = self._step_count >= self._max_episode_steps
+
+        # Collision flags (always reported, no effect on reward/termination)
+        info["collision_object_bin"] = self._check_object_bin_collision()
+        info["collision_object_object"] = self._check_object_object_collision()
 
         obs = self._get_obs()
 
