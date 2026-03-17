@@ -560,7 +560,11 @@ class BottlePackingGymEnv(gym.Env):
         belt_queue = [bottle_index]
         upcoming = options.get("belt_bottles") if options else None
         if upcoming is None:
-            packed_set = set(packed.keys()) if packed else set()
+            if packed is not None:
+                packed_set = set(packed.keys())
+            else:
+                # Sequential mode: bottles 0..well_index-1 are pre-packed
+                packed_set = set(range(self._well_index))
             upcoming = [
                 i for i in range(NUM_WELLS) if i != bottle_index and i not in packed_set
             ]
