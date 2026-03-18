@@ -232,7 +232,8 @@
                         <joint name="finger_joint1" class="finger"/>
                         <geom mesh="finger_0" material="off_white" class="visual"/>
                         <geom mesh="finger_1" material="black" class="visual"/>
-                        <geom mesh="finger_0" class="collision"/>
+                        <!-- Finger mesh collision disabled — convex hull is too bulky.
+                             Fingertip pad boxes below provide tight contact surfaces. -->
                         <geom class="fingertip_pad_collision_1"/>
                         <geom class="fingertip_pad_collision_2"/>
                         <geom class="fingertip_pad_collision_3"/>
@@ -244,7 +245,6 @@
                         <joint name="finger_joint2" class="finger"/>
                         <geom mesh="finger_0" material="off_white" class="visual"/>
                         <geom mesh="finger_1" material="black" class="visual"/>
-                        <geom mesh="finger_0" class="collision"/>
                         <geom class="fingertip_pad_collision_1"/>
                         <geom class="fingertip_pad_collision_2"/>
                         <geom class="fingertip_pad_collision_3"/>

@@ -1,7 +1,7 @@
 <mujoco model="bottle_packing_scene">
   <compiler angle="radian"/>
 
-  <option timestep="0.002" gravity="0 0 -9.81" noslip_iterations="10"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
 
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.1 0.1 0.1"/>
@@ -144,181 +144,181 @@
     <body name="bottle_00" pos="0 0 -1">
       <freejoint name="bottle_00_jnt"/>
       <geom name="bottle_00_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_00_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_01" pos="0 0 -1">
       <freejoint name="bottle_01_jnt"/>
       <geom name="bottle_01_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_01_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_02" pos="0 0 -1">
       <freejoint name="bottle_02_jnt"/>
       <geom name="bottle_02_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_02_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_03" pos="0 0 -1">
       <freejoint name="bottle_03_jnt"/>
       <geom name="bottle_03_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_03_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_04" pos="0 0 -1">
       <freejoint name="bottle_04_jnt"/>
       <geom name="bottle_04_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_04_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_05" pos="0 0 -1">
       <freejoint name="bottle_05_jnt"/>
       <geom name="bottle_05_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_05_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_06" pos="0 0 -1">
       <freejoint name="bottle_06_jnt"/>
       <geom name="bottle_06_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_06_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_07" pos="0 0 -1">
       <freejoint name="bottle_07_jnt"/>
       <geom name="bottle_07_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_07_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_08" pos="0 0 -1">
       <freejoint name="bottle_08_jnt"/>
       <geom name="bottle_08_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_08_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_09" pos="0 0 -1">
       <freejoint name="bottle_09_jnt"/>
       <geom name="bottle_09_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_09_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_10" pos="0 0 -1">
       <freejoint name="bottle_10_jnt"/>
       <geom name="bottle_10_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_10_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_11" pos="0 0 -1">
       <freejoint name="bottle_11_jnt"/>
       <geom name="bottle_11_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_11_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_12" pos="0 0 -1">
       <freejoint name="bottle_12_jnt"/>
       <geom name="bottle_12_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_12_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_13" pos="0 0 -1">
       <freejoint name="bottle_13_jnt"/>
       <geom name="bottle_13_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_13_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_14" pos="0 0 -1">
       <freejoint name="bottle_14_jnt"/>
       <geom name="bottle_14_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_14_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_15" pos="0 0 -1">
       <freejoint name="bottle_15_jnt"/>
       <geom name="bottle_15_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_15_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_16" pos="0 0 -1">
       <freejoint name="bottle_16_jnt"/>
       <geom name="bottle_16_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_16_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_17" pos="0 0 -1">
       <freejoint name="bottle_17_jnt"/>
       <geom name="bottle_17_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_17_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_18" pos="0 0 -1">
       <freejoint name="bottle_18_jnt"/>
       <geom name="bottle_18_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_18_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
     <body name="bottle_19" pos="0 0 -1">
       <freejoint name="bottle_19_jnt"/>
       <geom name="bottle_19_body" type="cylinder" size="0.014 0.035" pos="0 0 -0.015"
-            material="bottle_mat" mass="0.04" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.08" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
       <geom name="bottle_19_neck" type="cylinder" size="0.011 0.015" pos="0 0 0.035"
-            material="bottle_mat" mass="0.01" condim="4" friction="2.0 0.5 0.01"
+            material="bottle_mat" mass="0.02" condim="4" friction="2.0 0.5 0.01"
             solref="0.002 1" solimp="0.99 0.999 0.001"/>
     </body>
   </worldbody>

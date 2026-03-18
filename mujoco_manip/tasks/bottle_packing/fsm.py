@@ -77,7 +77,7 @@ INSERT_FZ_SKIP = 100  # ignore F/T for first N steps (arm dynamics settling)
 
 # Settle times (simulation steps)
 GRIPPER_CLOSE_STEPS = 150  # time for gripper to close on bottle
-GRIPPER_OPEN_STEPS = 200  # time to gradually open gripper (slow release)
+GRIPPER_OPEN_STEPS = 100  # time to open gripper
 GRIPPER_OPEN_WAIT = 100  # hold with gripper open before moving
 WELL_SETTLE_STEPS = 150  # let bottle stop swinging after transit
 INSERT_SETTLE_STEPS = 100  # hold at insertion depth before release
