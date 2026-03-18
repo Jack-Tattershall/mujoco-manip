@@ -69,8 +69,8 @@ TRANSIT_HEIGHT = 0.55  # lateral move height (clears crate walls)
 APPROACH_WELL_HEIGHT = 0.49  # bottle bottom (hand-0.16) clears outer wall tops (0.322)
 INSERT_HEIGHT_LIMIT = 0.38  # safety floor: never descend below this
 
-# F/T sensor: during free descent Fz ≈ −7 to −8 N (bottle weight).
-# On wall/floor contact, friction supports the bottle and Fz rises to ~−1 N.
+# F/T sensor: during free descent Fz ≈ −14 to −16 N (bottle weight).
+# On wall/floor contact, friction supports the bottle and Fz rises toward 0 N.
 # Trigger when Fz exceeds this threshold (clear load relief = contact).
 INSERT_FZ_CONTACT = -2.0  # Newtons
 INSERT_FZ_SKIP = 100  # ignore F/T for first N steps (arm dynamics settling)
