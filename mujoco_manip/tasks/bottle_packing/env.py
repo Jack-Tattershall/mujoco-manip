@@ -88,14 +88,6 @@ class BottlePackingEnv:
             self._crate_qpos_adr = []
             self._crate_is_dynamic = False
 
-        # Store default geom collision settings (to restore after freeze)
-        self._default_contype: int = self.model.geom_contype[
-            self._bottle_geom_ids[0][0]
-        ]
-        self._default_conaffinity: int = self.model.geom_conaffinity[
-            self._bottle_geom_ids[0][0]
-        ]
-
         # Cache body IDs for name-based lookups (pre-seeded with known bodies)
         self._body_id_cache: dict[str, int] = {
             name: bid for name, bid in zip(BOTTLE_BODIES, self._bottle_body_ids)
@@ -142,19 +134,18 @@ class BottlePackingEnv:
 
     def _unfreeze_bottle(self, idx: int) -> None:
         """Restore physics for a single bottle."""
-        for gid in self._bottle_geom_ids[idx]:
-            self.model.geom_contype[gid] = self._default_contype
-            self.model.geom_conaffinity[gid] = self._default_conaffinity
         bid = self._bottle_body_ids[idx]
         self.model.body_gravcomp[bid] = 0.0
         vadr = self._bottle_qvel_adr[idx]
         self.model.dof_damping[vadr : vadr + 6] = 0.0
 
     def _freeze_bottle(self, idx: int) -> None:
-        """Make a single bottle physics-inert."""
-        for gid in self._bottle_geom_ids[idx]:
-            self.model.geom_contype[gid] = 0
-            self.model.geom_conaffinity[gid] = 0
+        """Make a single bottle physics-inert (but keep collision geometry).
+
+        Frozen bottles retain their collision properties so the gripper and
+        held bottle cannot pass through them.  High damping and gravity
+        compensation keep the bottle stationary despite any contact forces.
+        """
         bid = self._bottle_body_ids[idx]
         self.model.body_gravcomp[bid] = 1.0
         vadr = self._bottle_qvel_adr[idx]

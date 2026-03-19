@@ -194,10 +194,13 @@ class TestTickConveyor:
         env.setup_scene(num_prepacked=0)
         env.spawn_bottle_on_conveyor(0)
         env.animate_conveyor()
-        # After marking as packed, bottle should be frozen
+        # After marking as packed, bottle should be frozen (high damping)
+        # but retain collision geometry
         env.mark_bottle_packed(0)
-        for gid in env._bottle_geom_ids[0]:
-            assert env.model.geom_contype[gid] == 0  # frozen
+        bid = env._bottle_body_ids[0]
+        assert env.model.body_gravcomp[bid] == 1.0
+        vadr = env._bottle_qvel_adr[0]
+        assert env.model.dof_damping[vadr] == 1e4
 
 
 # ---------------------------------------------------------------------------
