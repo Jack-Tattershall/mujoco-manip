@@ -68,7 +68,7 @@ class TestSceneSetup:
     def test_setup_scene_hides_bottles(self, env):
         env.reset_to_keyframe("scene_start")
         env.setup_scene(num_prepacked=0)
-        # All bottles should be hidden underground
+        # All bottles should be hidden underground with collision disabled
         for i in range(NUM_WELLS):
             pos = env.get_body_pos(BOTTLE_BODIES[i])
             assert pos[2] < 0, f"Bottle {i} should be hidden (z={pos[2]})"
@@ -82,7 +82,7 @@ class TestSceneSetup:
             wp = well_position(i)
             np.testing.assert_allclose(pos[:2], wp[:2], atol=0.01)
             assert pos[2] > 0
-        # Remaining bottles should be hidden
+        # Remaining bottles should be hidden underground
         for i in range(3, NUM_WELLS):
             pos = env.get_body_pos(BOTTLE_BODIES[i])
             assert pos[2] < 0

@@ -132,6 +132,18 @@ class BottlePackingEnv:
         self.data.qpos[adr + 3 : adr + 7] = quat if quat is not None else [1, 0, 0, 0]
         self.data.qvel[vadr : vadr + 6] = 0
 
+    def _disable_bottle_collision(self, idx: int) -> None:
+        """Disable collision for a hidden bottle's geoms."""
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = 0
+            self.model.geom_conaffinity[gid] = 0
+
+    def _enable_bottle_collision(self, idx: int) -> None:
+        """Re-enable collision for a bottle's geoms."""
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = 1
+            self.model.geom_conaffinity[gid] = 1
+
     def _unfreeze_bottle(self, idx: int) -> None:
         """Restore physics for a single bottle."""
         bid = self._bottle_body_ids[idx]
@@ -198,8 +210,10 @@ class BottlePackingEnv:
                     wp = well_position(packed[i])
                     pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
                     self._set_bottle_pose(i, pos)
+                    self._enable_bottle_collision(i)
                 else:
                     self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+                    self._disable_bottle_collision(i)
             # Placeholder: overwritten by spawn_bottle_on_conveyor / load_conveyor.
             # Uses max(keys)+1 as a safe default for freeze_inactive_bottles.
             self._active_bottle = max(packed.keys()) + 1 if packed else 0
@@ -209,8 +223,10 @@ class BottlePackingEnv:
                     wp = well_position(i)
                     pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
                     self._set_bottle_pose(i, pos)
+                    self._enable_bottle_collision(i)
                 else:
                     self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+                    self._disable_bottle_collision(i)
             self._active_bottle = num_prepacked
 
         self._freeze_inactive_bottles()
@@ -231,6 +247,7 @@ class BottlePackingEnv:
         # Freeze everything, then unfreeze only the active bottle
         self._freeze_inactive_bottles()
         self._unfreeze_bottle(bottle_idx)
+        self._enable_bottle_collision(bottle_idx)
         start = BOTTLE_CONVEYOR_START.copy()
         start[1] += y_offset
         self._set_bottle_pose(bottle_idx, start)
@@ -262,6 +279,7 @@ class BottlePackingEnv:
 
         self._freeze_inactive_bottles()
         self._unfreeze_bottle(bottle_idx)
+        self._enable_bottle_collision(bottle_idx)
         pos = BOTTLE_PICKUP_POS.copy()
         pos[1] += y_offset
         self._set_bottle_pose(bottle_idx, pos)
@@ -367,6 +385,7 @@ class BottlePackingEnv:
             if self._belt_y_noise > 0 and self._belt_rng is not None:
                 y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
             pos = np.array([x, y, BOTTLE_CONVEYOR_START[2]])
+            self._enable_bottle_collision(idx)
             self._set_bottle_pose(idx, pos)
             self._belt_bottle_indices.append(idx)
             self._freeze_bottle(idx)
@@ -391,6 +410,7 @@ class BottlePackingEnv:
             y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
 
         pos = np.array([spawn_x, y, BOTTLE_CONVEYOR_START[2]])
+        self._enable_bottle_collision(idx)
         self._set_bottle_pose(idx, pos)
         self._belt_bottle_indices.append(idx)
         # Belt bottles stay frozen (kinematic positioning)

@@ -56,7 +56,7 @@ BOTTLE_BODIES = [f"bottle_{i:02d}" for i in range(NUM_WELLS)]
 CRATE_BODY = "crate"
 CRATE_JOINT_NAMES = ["crate_slide_x", "crate_slide_y", "crate_hinge_z"]
 
-# Hidden position (underground, out of sight)
+# Hidden position (underground, collision disabled so no floor contacts)
 BOTTLE_HIDDEN_POS = np.array([0.0, 0.0, -1.0])
 
 # Bottle half-height (for computing center height in wells)
@@ -80,7 +80,7 @@ GRASP_VERIFY_Z = 0.35  # bottle must exceed this to confirm grasp
 # Workspace bounds for EE target clamping (prevents VLA from commanding
 # extreme / unreachable poses that can cause simulation divergence).
 WORKSPACE_MIN = np.array([-0.15, 0.15, 0.24])
-WORKSPACE_MAX = np.array([0.45, 0.65, 0.60])
+WORKSPACE_MAX = np.array([0.45, 0.65, 0.65])
 
 IMAGE_SIZE = 224
 CONTROL_FPS = 30
