@@ -125,12 +125,25 @@ class BottlePackingEnv:
     def _set_bottle_pose(
         self, bottle_idx: int, pos: np.ndarray, quat: np.ndarray | None = None
     ) -> None:
-        """Set a bottle's qpos (position + quaternion) and zero its velocity."""
+        """Set a bottle's qpos (position + quaternion) and zero its velocity/acceleration."""
         adr = self._bottle_qpos_adr[bottle_idx]
         vadr = self._bottle_qvel_adr[bottle_idx]
         self.data.qpos[adr : adr + 3] = pos
         self.data.qpos[adr + 3 : adr + 7] = quat if quat is not None else [1, 0, 0, 0]
         self.data.qvel[vadr : vadr + 6] = 0
+        self.data.qacc[vadr : vadr + 6] = 0
+
+    def _disable_bottle_collision(self, idx: int) -> None:
+        """Disable collision for a hidden bottle's geoms."""
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = 0
+            self.model.geom_conaffinity[gid] = 0
+
+    def _enable_bottle_collision(self, idx: int) -> None:
+        """Re-enable collision for a bottle's geoms."""
+        for gid in self._bottle_geom_ids[idx]:
+            self.model.geom_contype[gid] = 1
+            self.model.geom_conaffinity[gid] = 1
 
     def _unfreeze_bottle(self, idx: int) -> None:
         """Restore physics for a single bottle."""
@@ -191,27 +204,27 @@ class BottlePackingEnv:
         """
         self._unfreeze_all_bottles()
         self._belt_bottle_indices = deque()
+        self._pending_bottles = deque()
+        self._conveyor_stopped = True
+        self._bottle_at_pickup = None
 
-        if packed is not None:
-            for i in range(NUM_WELLS):
-                if i in packed:
-                    wp = well_position(packed[i])
-                    pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
-                    self._set_bottle_pose(i, pos)
-                else:
-                    self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
-            # Placeholder: overwritten by spawn_bottle_on_conveyor / load_conveyor.
-            # Uses max(keys)+1 as a safe default for freeze_inactive_bottles.
-            self._active_bottle = max(packed.keys()) + 1 if packed else 0
-        else:
-            for i in range(NUM_WELLS):
-                if i < num_prepacked:
-                    wp = well_position(i)
-                    pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
-                    self._set_bottle_pose(i, pos)
-                else:
-                    self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
-            self._active_bottle = num_prepacked
+        # Normalise sequential mode into an explicit packed dict
+        if packed is None:
+            packed = {i: i for i in range(num_prepacked)}
+
+        for i in range(NUM_WELLS):
+            if i in packed:
+                wp = well_position(packed[i])
+                pos = np.array([wp[0], wp[1], wp[2] + BOTTLE_HALF_HEIGHT])
+                self._set_bottle_pose(i, pos)
+                self._enable_bottle_collision(i)
+            else:
+                self._set_bottle_pose(i, BOTTLE_HIDDEN_POS)
+                self._disable_bottle_collision(i)
+
+        # Placeholder: overwritten by spawn_bottle_on_conveyor / load_conveyor.
+        # Uses max(keys)+1 as a safe default for freeze_inactive_bottles.
+        self._active_bottle = max(packed.keys()) + 1 if packed else 0
 
         self._freeze_inactive_bottles()
         mujoco.mj_forward(self.model, self.data)
@@ -231,6 +244,7 @@ class BottlePackingEnv:
         # Freeze everything, then unfreeze only the active bottle
         self._freeze_inactive_bottles()
         self._unfreeze_bottle(bottle_idx)
+        self._enable_bottle_collision(bottle_idx)
         start = BOTTLE_CONVEYOR_START.copy()
         start[1] += y_offset
         self._set_bottle_pose(bottle_idx, start)
@@ -262,6 +276,7 @@ class BottlePackingEnv:
 
         self._freeze_inactive_bottles()
         self._unfreeze_bottle(bottle_idx)
+        self._enable_bottle_collision(bottle_idx)
         pos = BOTTLE_PICKUP_POS.copy()
         pos[1] += y_offset
         self._set_bottle_pose(bottle_idx, pos)
@@ -367,6 +382,7 @@ class BottlePackingEnv:
             if self._belt_y_noise > 0 and self._belt_rng is not None:
                 y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
             pos = np.array([x, y, BOTTLE_CONVEYOR_START[2]])
+            self._enable_bottle_collision(idx)
             self._set_bottle_pose(idx, pos)
             self._belt_bottle_indices.append(idx)
             self._freeze_bottle(idx)
@@ -391,15 +407,19 @@ class BottlePackingEnv:
             y += self._belt_rng.uniform(-self._belt_y_noise, self._belt_y_noise)
 
         pos = np.array([spawn_x, y, BOTTLE_CONVEYOR_START[2]])
+        self._enable_bottle_collision(idx)
         self._set_bottle_pose(idx, pos)
         self._belt_bottle_indices.append(idx)
         # Belt bottles stay frozen (kinematic positioning)
         self._freeze_bottle(idx)
 
-    def tick_conveyor(self) -> int | None:
-        """Advance all belt bottles by one step.
+    def tick_conveyor(self, steps: int = 1) -> int | None:
+        """Advance all belt bottles by *steps* ticks.
 
-        Call once per physics step, **after** ``step()``.
+        Call once per control step, **after** all physics sub-steps.
+
+        Args:
+            steps: Number of ticks to advance (typically ``ACTION_REPEAT``).
 
         Returns:
             The bottle index that just arrived at pickup, or *None*.
@@ -407,19 +427,22 @@ class BottlePackingEnv:
         if self._conveyor_stopped or not self._belt_bottle_indices:
             return None
 
-        # Advance every bottle on the belt
+        # Advance every bottle on the belt (clamp to pickup X)
+        pickup_x = BOTTLE_PICKUP_POS[0]
         for idx in self._belt_bottle_indices:
             adr = self._bottle_qpos_adr[idx]
-            self.data.qpos[adr] += CONVEYOR_SPEED
+            self.data.qpos[adr] = min(
+                self.data.qpos[adr] + CONVEYOR_SPEED * steps, pickup_x
+            )
             vadr = self._bottle_qvel_adr[idx]
             self.data.qvel[vadr : vadr + 6] = 0
+            self.data.qacc[vadr : vadr + 6] = 0
 
         # Check if front bottle reached pickup
         front = self._belt_bottle_indices[0]
         adr = self._bottle_qpos_adr[front]
-        if self.data.qpos[adr] >= BOTTLE_PICKUP_POS[0]:
-            # Snap X to pickup, keep randomised Y
-            self.data.qpos[adr] = BOTTLE_PICKUP_POS[0]
+        if self.data.qpos[adr] >= pickup_x:
+            # Snap Z to pickup surface, keep randomised Y
             self.data.qpos[adr + 2] = BOTTLE_PICKUP_POS[2]
             self._conveyor_stopped = True
             self._bottle_at_pickup = front

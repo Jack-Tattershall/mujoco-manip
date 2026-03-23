@@ -29,6 +29,8 @@ from .constants import (
     NUM_WELLS,
     TASK_SETS,
     WELL_WALL_HEIGHT,
+    WORKSPACE_MAX,
+    WORKSPACE_MIN,
     well_position,
 )
 from .env import BottlePackingEnv
@@ -610,6 +612,7 @@ class BottlePackingGymEnv(gym.Env):
     ) -> tuple[dict[str, np.ndarray], float, bool, bool, dict]:
         action = np.asarray(action, dtype=np.float32)
         ee_target, gripper_cmd = self.decode_action(action)
+        ee_target = np.clip(ee_target, WORKSPACE_MIN, WORKSPACE_MAX)
 
         if gripper_cmd > 0.5:
             self._robot.open_gripper()
@@ -620,9 +623,20 @@ class BottlePackingGymEnv(gym.Env):
             q_target = self._controller.compute(ee_target)
             self._robot.set_arm_ctrl(q_target)
             self._env.step()
-            self._env.tick_conveyor()
+
+        # Advance conveyor AFTER all physics sub-steps to avoid stale
+        # warmstart / qacc corruption from interleaving state writes with
+        # mj_step (known MuJoCo anti-pattern that causes solver divergence).
+        self._env.tick_conveyor(steps=ACTION_REPEAT)
 
         mujoco.mj_forward(self._env.model, self._env.data)
+
+        # Early-terminate on simulation divergence (NaN in state)
+        if np.any(np.isnan(self._env.data.qpos)) or np.any(
+            np.isnan(self._env.data.qvel)
+        ):
+            obs = self._get_obs()
+            return obs, 0.0, True, False, {"success": False, "diverged": True}
 
         # Track peak positive Fz (insertion contact force)
         fz = float(self._robot.ee_force_torque[2])

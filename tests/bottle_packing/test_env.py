@@ -68,24 +68,35 @@ class TestSceneSetup:
     def test_setup_scene_hides_bottles(self, env):
         env.reset_to_keyframe("scene_start")
         env.setup_scene(num_prepacked=0)
-        # All bottles should be hidden underground
+        # All bottles should be hidden underground with collision disabled
         for i in range(NUM_WELLS):
             pos = env.get_body_pos(BOTTLE_BODIES[i])
             assert pos[2] < 0, f"Bottle {i} should be hidden (z={pos[2]})"
+            for gid in env._bottle_geom_ids[i]:
+                assert env.model.geom_contype[gid] == 0, (
+                    f"Bottle {i} geom {gid} should have contype=0 when hidden"
+                )
+                assert env.model.geom_conaffinity[gid] == 0, (
+                    f"Bottle {i} geom {gid} should have conaffinity=0 when hidden"
+                )
 
     def test_setup_scene_prepacked(self, env):
         env.reset_to_keyframe("scene_start")
         env.setup_scene(num_prepacked=3)
-        # First 3 bottles should be in their wells (above ground)
+        # First 3 bottles should be in their wells with collision enabled
         for i in range(3):
             pos = env.get_body_pos(BOTTLE_BODIES[i])
             wp = well_position(i)
             np.testing.assert_allclose(pos[:2], wp[:2], atol=0.01)
             assert pos[2] > 0
-        # Remaining bottles should be hidden
+            for gid in env._bottle_geom_ids[i]:
+                assert env.model.geom_contype[gid] != 0
+        # Remaining bottles should be hidden with collision disabled
         for i in range(3, NUM_WELLS):
             pos = env.get_body_pos(BOTTLE_BODIES[i])
             assert pos[2] < 0
+            for gid in env._bottle_geom_ids[i]:
+                assert env.model.geom_contype[gid] == 0
 
     def test_active_bottle_after_setup(self, env):
         env.reset_to_keyframe("scene_start")

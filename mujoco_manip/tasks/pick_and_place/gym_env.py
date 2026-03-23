@@ -25,6 +25,8 @@ from .constants import (
     MAX_EPISODE_STEPS,
     OBJECTS,
     TASK_SETS,
+    WORKSPACE_MAX,
+    WORKSPACE_MIN,
 )
 from .env import PickPlaceEnv
 
@@ -563,6 +565,7 @@ class PickPlaceGymEnv(gym.Env):
         """
         action = np.asarray(action, dtype=np.float32)
         ee_target, gripper_cmd = self.decode_action(action)
+        ee_target = np.clip(ee_target, WORKSPACE_MIN, WORKSPACE_MAX)
 
         if gripper_cmd > 0.5:
             self._robot.open_gripper()
@@ -575,6 +578,13 @@ class PickPlaceGymEnv(gym.Env):
             self._env.step()
 
         mujoco.mj_forward(self._env.model, self._env.data)
+
+        # Early-terminate on simulation divergence (NaN in state)
+        if np.any(np.isnan(self._env.data.qpos)) or np.any(
+            np.isnan(self._env.data.qvel)
+        ):
+            obs = self._get_obs()
+            return obs, 0.0, True, False, {"success": False, "diverged": True}
 
         self._step_count += 1
 
