@@ -77,6 +77,11 @@ TASK_SETS = {
 CONVEYOR_RESUME_Z = 0.34  # resume belt when bottle clears this height
 GRASP_VERIFY_Z = 0.35  # bottle must exceed this to confirm grasp
 
+# Workspace bounds for EE target clamping (prevents VLA from commanding
+# extreme / unreachable poses that can cause simulation divergence).
+WORKSPACE_MIN = np.array([-0.15, 0.15, 0.24])
+WORKSPACE_MAX = np.array([0.45, 0.65, 0.60])
+
 IMAGE_SIZE = 224
 CONTROL_FPS = 30
 PHYSICS_DT = 0.002

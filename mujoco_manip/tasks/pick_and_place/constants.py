@@ -1,5 +1,7 @@
 """Shared constants for the pick-and-place simulation."""
 
+import numpy as np
+
 OBJECTS = ["obj_red", "obj_green", "obj_blue"]
 BINS = ["bin_red", "bin_green", "bin_blue"]
 
@@ -25,6 +27,11 @@ CONTROL_FPS = 30
 PHYSICS_DT = 0.002
 ACTION_REPEAT = 16  # int(1/30 / 0.002) ≈ 16 → ~31 Hz control
 MAX_EPISODE_STEPS = 500
+
+# Workspace bounds for EE target clamping (prevents VLA from commanding
+# extreme / unreachable poses that can cause simulation divergence).
+WORKSPACE_MIN = np.array([-0.35, 0.10, 0.24])
+WORKSPACE_MAX = np.array([0.35, 0.65, 0.60])
 
 KEYPOINT_BODIES = [
     "obj_red",

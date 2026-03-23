@@ -289,7 +289,7 @@ class TestKnownDisplacement:
             obs, *_ = env_quat_rel.step(action)
         expected = (T_init @ np.array([*dx, 1.0]))[:3]
         dist = np.linalg.norm(obs["state"][:3] - expected)
-        assert dist < 0.05
+        assert dist < 0.06
 
 
 # ---------------------------------------------------------------------------

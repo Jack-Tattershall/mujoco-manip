@@ -396,10 +396,13 @@ class BottlePackingEnv:
         # Belt bottles stay frozen (kinematic positioning)
         self._freeze_bottle(idx)
 
-    def tick_conveyor(self) -> int | None:
-        """Advance all belt bottles by one step.
+    def tick_conveyor(self, steps: int = 1) -> int | None:
+        """Advance all belt bottles by *steps* ticks.
 
-        Call once per physics step, **after** ``step()``.
+        Call once per control step, **after** all physics sub-steps.
+
+        Args:
+            steps: Number of ticks to advance (typically ``ACTION_REPEAT``).
 
         Returns:
             The bottle index that just arrived at pickup, or *None*.
@@ -410,9 +413,10 @@ class BottlePackingEnv:
         # Advance every bottle on the belt
         for idx in self._belt_bottle_indices:
             adr = self._bottle_qpos_adr[idx]
-            self.data.qpos[adr] += CONVEYOR_SPEED
+            self.data.qpos[adr] += CONVEYOR_SPEED * steps
             vadr = self._bottle_qvel_adr[idx]
             self.data.qvel[vadr : vadr + 6] = 0
+            self.data.qacc[vadr : vadr + 6] = 0
 
         # Check if front bottle reached pickup
         front = self._belt_bottle_indices[0]
